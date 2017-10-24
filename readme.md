@@ -1,3 +1,4 @@
+             |                                                        
 -------------|--------------------------------------------------------
 **TITLE:**   | fmodpy
 **PURPOSE:** | A lightweight, efficient, highly-automated, fortran wrapper for python.
@@ -48,14 +49,10 @@
 
 ## VERSION HISTORY:
 
-Version and Date | Description
------------------|----------------------------------------------------
- 0.0.0           | First stable release, handles integers, reals,      
- October 2017 -- | characters, logicals, and procedures (as arguments).
-                 | Compiles on Ubuntu, Mac OS, and Windows using       
-                 | gcc as the linker, gcc / clang / gcc respectively   
-                 | as the compilers.                                   
------------------|----------------------------------------------------
+Version and Date       | Description
+-----------------------|-----------------------
+ 0.0.0<br>October 2017 | First stable release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers.
+
 
 ## UPCOMING MODIFICATIONS:
 
