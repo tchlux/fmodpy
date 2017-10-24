@@ -56,12 +56,12 @@
 
 ## UPCOMING (checked means in development):
 
-# BUGS
+### BUGS
 
 - [ ] Make sure fortran argument names do not conflict with reserved
       words in python, if they do, then add a reserved-word prefix
 
-# USABILITY
+### USABILITY
 
 - [ ] Restructure code-base to be broken up into the different parts
       of the wrapping process and unclutter __init__.py in the process.
@@ -71,7 +71,7 @@
 - [ ] Add example fortran programs that can be used as test cases and
       demonstrations for new users.
 
-# IMPROVEMENTS
+### IMPROVEMENTS
 
 - [ ] Add python interface for permanently changing default compilation options.
 
