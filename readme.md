@@ -1,10 +1,10 @@
-             |                                                        
--------------|--------------------------------------------------------
-**TITLE:**   | fmodpy
-**PURPOSE:** | A lightweight, efficient, highly-automated, fortran wrapper for python.
-**AUTHOR:**  | Thomas C.H. Lux
-**EMAIL:**   | tchlux@vt.edu
--------------|--------------------------------------------------------
+|About        | Value                                                                  |
+|-------------|------------------------------------------------------------------------|
+|**TITLE:**   | fmodpy                                                                 |
+|**PURPOSE:** | A lightweight, efficient, highly-automated, fortran wrapper for python.|
+|**AUTHOR:**  | Thomas C.H. Lux                                                        |
+|**EMAIL:**   | tchlux@vt.edu                                                          |
+
 
 ## INSTALLATION:
 
@@ -49,20 +49,24 @@
 
 ## VERSION HISTORY:
 
-Version and Date       | Description
------------------------|-----------------------
- 0.0.0<br>October 2017 | First stable release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers.
+|Version and Date       | Description           |
+|-----------------------|-----------------------|
+| 0.0.0<br>October 2017 | First stable release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. |
 
 
 ## UPCOMING MODIFICATIONS:
 
 TODO: Make sure fortran argument names do not conflict with reserved
       words in python, if they do, then add a reserved-word previx
+
 TODO: Add scanner that automatically parses the first few lines of
       python file that imported fmodpy to do automatic compilcation.
+
 TODO: Make intermediate fortran subroutine that passes assumed
       shapes back into C (for passing subroutines as arguments).
+
 TODO: Add support for fortran data types (structs in C).
+
 TODO: Restructure fortran parsing to be based on a grammar (like
       python itself). Use this grammar to parse individual lines of
       fortran code instead of the list/conditional mechanism I have.
