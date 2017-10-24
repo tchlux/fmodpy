@@ -44,7 +44,7 @@
 
   This uses the specifications from the fortran file to determine how
   the interface for each subroutine / function should behave. (i.e.
-  INTENT(IN) does not return, INTENT(OUT) is optional as input)
+  `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input)
 
 
 ## VERSION HISTORY:
@@ -56,17 +56,17 @@
 
 ## UPCOMING MODIFICATIONS:
 
-TODO: Make sure fortran argument names do not conflict with reserved
+- [ ] Make sure fortran argument names do not conflict with reserved
       words in python, if they do, then add a reserved-word previx
 
-TODO: Add scanner that automatically parses the first few lines of
+- [ ] Add scanner that automatically parses the first few lines of
       python file that imported fmodpy to do automatic compilcation.
 
-TODO: Make intermediate fortran subroutine that passes assumed
+- [ ] Make intermediate fortran subroutine that passes assumed
       shapes back into C (for passing subroutines as arguments).
 
-TODO: Add support for fortran data types (structs in C).
+- [ ] Add support for fortran data types (structs in C).
 
-TODO: Restructure fortran parsing to be based on a grammar (like
+- [ ] Restructure fortran parsing to be based on a grammar (like
       python itself). Use this grammar to parse individual lines of
       fortran code instead of the list/conditional mechanism I have.
