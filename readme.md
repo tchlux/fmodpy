@@ -51,20 +51,36 @@
 
 |Version and Date       | Description           |
 |-----------------------|-----------------------|
-| 0.0.0<br>October 2017 | First stable release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. |
+| 0.0.0<br>October 2017 | First release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. |
 
 
-## UPCOMING MODIFICATIONS: *(checked if bug)*
+## UPCOMING (checked means in development):
 
-- [x] Make sure fortran argument names do not conflict with reserved
+# BUGS
+
+- [ ] Make sure fortran argument names do not conflict with reserved
       words in python, if they do, then add a reserved-word prefix
 
-- [ ] Add scanner that automatically parses the first few lines of
-      python file that imported fmodpy to do automatic compilation.
+# USABILITY
+
+- [ ] Restructure code-base to be broken up into the different parts
+      of the wrapping process and unclutter __init__.py in the process.
+      (i.e. parse_fortran.py, generate_fortran_wrapper.py,
+       generate_cython_wrapper.py, construct_py_module.py)
+
+- [ ] Add example fortran programs that can be used as test cases and
+      demonstrations for new users.
+
+# IMPROVEMENTS
+
+- [ ] Add python interface for permanently changing default compilation options.
 
 - [ ] Make intermediate fortran subroutine that passes assumed
       shapes back into C (for passing subroutines as arguments when 
       the subroutines have assumed shape arrays).
 
 - [ ] Add support for fortran data types (structs in C).
+
+- [ ] Add scanner that automatically parses the first few lines of
+      python file that imported fmodpy to do automatic compilation.
 
