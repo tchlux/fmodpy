@@ -51,7 +51,7 @@
 
 |Version and Date       | Description           |
 |-----------------------|-----------------------|
-| 0.0.0<br>October 2017 | First release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. |
+| 0.0.0<br>October 2017 | First release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. Supports Python2.7 and Python3.x.|
 
 
 ## UPCOMING (checked means in development):
