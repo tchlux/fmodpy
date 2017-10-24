@@ -19,8 +19,8 @@ def run(command, **popen_kwargs):
     # For Python3.x ensure that the outputs are strings
     if sys.version_info >= (3,6):
         popen_kwargs.update( dict(encoding="UTF-8") )
-    print("'%s'"%(" ".join(command)))
-    return 0, [], []
+    # print("'%s'"%(" ".join(command)))
+    # return
     proc = subprocess.Popen(command, stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, **popen_kwargs)
     stdout, stderr = proc.communicate()
@@ -43,6 +43,10 @@ if __name__ == "__main__":
     with open("version.txt") as f:
         version = f.read().strip()
 
+    #      Remove all of the wheel generated files     
+    # =================================================
+    run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
+
     #      Setup the python package as a universal wheel     
     # =======================================================
     run(["python3", "setup.py", "bdist_wheel"])
@@ -63,4 +67,4 @@ if __name__ == "__main__":
 
     #      Remove all of the wheel generated files     
     # =================================================
-    run(["rm", "-r", "dist", "build", "*.egg-info"])
+    run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
