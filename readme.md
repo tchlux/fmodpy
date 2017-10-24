@@ -1,21 +1,22 @@
-:------------|:-------
+-------------|--------------------------------------------------------
 **TITLE:**   | fmodpy
 **PURPOSE:** | A lightweight, efficient, highly-automated, fortran wrapper for python.
 **AUTHOR:**  | Thomas C.H. Lux
 **EMAIL:**   | tchlux@vt.edu
+-------------|--------------------------------------------------------
 
-# INSTALLATION:
+## INSTALLATION:
 
     $ pip install fmodpy
 
-# PYTHON USAGE:
+## PYTHON USAGE:
 
     import fmodpy
     fmodpy.wrap("<fortran source file>")
     import <fortran_as_module>
 
 
-# COMMAND LINE USAGE:
+## COMMAND LINE USAGE:
 
   For details on the different options, run python interactively and 
   look at help(fmodpy.wrap). The execution of the program looks like:
@@ -26,7 +27,7 @@
   imported as any other python module would be.
 
 
-# HOW IT WORKS:
+## HOW IT WORKS:
 
   Reads the fortran file, abstracting out the modules, subroutines,
   functions. Identifies the type-description of each argument for
@@ -45,16 +46,18 @@
   INTENT(IN) does not return, INTENT(OUT) is optional as input)
 
 
-# VERSION HISTORY:
+## VERSION HISTORY:
 
- 0.0.0
- October 2017 -- First stable release, handles integers, reals,
-                 characters, logicals, and procedures (as arguments).
-                 Compiles on Ubuntu, Mac OS, and Windows using
-                 gcc as the linker, gcc / clang / gcc respectively
-                 as the compilers.
+Version and Date | Description
+-----------------|----------------------------------------------------
+ 0.0.0           | First stable release, handles integers, reals,      
+ October 2017 -- | characters, logicals, and procedures (as arguments).
+                 | Compiles on Ubuntu, Mac OS, and Windows using       
+                 | gcc as the linker, gcc / clang / gcc respectively   
+                 | as the compilers.                                   
+-----------------|----------------------------------------------------
 
-# UPCOMING MODIFICATIONS:
+## UPCOMING MODIFICATIONS:
 
 TODO: Make sure fortran argument names do not conflict with reserved
       words in python, if they do, then add a reserved-word previx
