@@ -1,4 +1,4 @@
-|About        | Value                                                                  |
+|About        |                                                                        |
 |-------------|------------------------------------------------------------------------|
 |**TITLE:**   | fmodpy                                                                 |
 |**PURPOSE:** | A lightweight, efficient, highly-automated, fortran wrapper for python.|
