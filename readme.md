@@ -64,7 +64,7 @@
 ### USABILITY
 
 - [ ] Restructure code-base to be broken up into the different parts
-      of the wrapping process and unclutter \__init__.py in the process.
+      of the wrapping process and unclutter \_\_init__.py in the process.
       (i.e. parse_fortran.py, generate_fortran_wrapper.py,
        generate_cython_wrapper.py, construct_py_module.py)
 
