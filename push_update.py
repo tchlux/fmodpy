@@ -1,3 +1,6 @@
+class CommandError(Exception): pass
+class NotEnoughArguments(Exception): pass
+
 # Execute a blocking command with a subprocess, on completion provide
 # the return code, stdout as string, and stderr as string. This should
 # work across both Python2.7 and Python3.x as well as cross-platform.
@@ -25,9 +28,10 @@ def run(command, **popen_kwargs):
     else:      stdout = ""
     if stderr: stderr = stderr.replace("\r","").split("\n")
     else:      stderr = ""
-    return proc.returncode, stdout, stderr
-
-class NotEnoughArguments(Exception): pass
+    if (proc.returncode != 0) or (len(stderr) > 0):
+        raise(CommandError("\n\n%s"%("\n".join(stderr))))
+    else:
+        print("\n".join(stdout))
 
 if __name__ == "__main__":
     import sys
@@ -41,33 +45,22 @@ if __name__ == "__main__":
 
     #      Setup the python package as a universal wheel     
     # =======================================================
-    code, stdout, stderr = run(["python3", "setup.py", "bdist_wheel"])
-    if code != 0:
-        print("\n".join(stderr))
-    # else:
-    #     print("\n".join(stdout))
+    run(["python3", "setup.py", "bdist_wheel"])
 
     #      Remove any pyc files that are hidden away     
     # ===================================================
-    code, stdout, stderr = run(["find", ".", "-name", '*.pyc', "-delete"])
-    if code != 0:
-        print("\n".join(stderr))
-    # else:
-    #     print("\n".join(stdout))
+    run(["find", ".", "-name", '*.pyc', "-delete"])
 
     #      Upload to github with version tag     
     # ===========================================
-    code, stdout, stderr = run(["git", "tag", "-a", version, "-m", notes])
-    code, stdout, stderr = run(["git", "push", "--tags"])
+    run(["git", "push", "fmodpy", "master"])
+    run(["git", "tag", "-a", version, "-m", notes])
+    run(["git", "push", "--tags"])
 
     #      Use twine to upload the package to PyPI     
     # =================================================
-    code, stdout, stderr = run(["twine", "upload", "dist/*"])
-    if code != 0:
-        print("\n".join(stderr))
-    # else:
-    #     print("\n".join(stdout))
+    run(["twine", "upload", "dist/*"])
 
     #      Remove all of the wheel generated files     
     # =================================================
-    code, stdout, stderr = run(["rm", "-r", "dist", "build", "*.egg-info"])
+    run(["rm", "-r", "dist", "build", "*.egg-info"])
