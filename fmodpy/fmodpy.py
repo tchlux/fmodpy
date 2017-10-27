@@ -1,10 +1,4 @@
 '''
-TITLE:   fmodpy
-PURPOSE: A lightweight, efficient, highly-automated, fortran wrapper for python.
-AUTHOR:  Thomas C.H. Lux
-EMAIL:   tchlux@vt.edu
-
-
 PYTHON USAGE:
  import fmodpy
  fmodpy.wrap("<fortran source file>")
@@ -19,46 +13,6 @@ COMMAND LINE USAGE:
 
   This outputs a <fortran mod name>.so python module that can be
   imported as any other python module would be.
-
-
-HOW IT WORKS:
-  Reads the fortran file, abstracting out the modules, subroutines,
-  functions. Identifies the type-description of each argument for
-  subroutines and functions. Uses type-descriptors to generate a
-  minimal cython wrapper and fortran wrapper. Afterwards a module is
-  generated using python distutils' setup.py. When importing and
-  using the generated fortran module, the call sequence looks like:
-
-       Python code
-    -> Cython
-    -> Wrapped fortran (transferring characters, implicit shapes, etc.)
-    -> Original fortran
-
-  This uses the specifications from the fortran file to determine how
-  the interface for each subroutine / function should behave. (i.e.
-  INTENT(IN) does not return, INTENT(OUT) is optional as input)
-
-
-VERSION HISTORY:
-
- October 2017 -- First stable release, handles integers, reals,
-                 characters, logicals, and procedures (as arguments).
-                 Compiles on Ubuntu, Mac OS, and Windows using
-                 gcc as the linker, gcc / clang / gcc respectively
-                 as the compilers.
-
-UPCOMING MODIFICATIONS:
-
-TODO: Make sure fortran argument names do not conflict with reserved
-      words in python, if they do, then add a reserved-word previx
-TODO: Add scanner that automatically parses the first few lines of
-      python file that imported fmodpy to do automatic compilcation.
-TODO: Make intermediate fortran subroutine that passes assumed
-      shapes back into C (for passing subroutines as arguments).
-TODO: Add support for fortran data types (structs in C).
-TODO: Restructure fortran parsing to be based on a grammar (like
-      python itself). Use this grammar to parse individual lines of
-      fortran code instead of the list/conditional mechanism I have.
 '''
 
 # In case this program is executed in python 2.7
@@ -77,6 +31,7 @@ c_compiler = None #"gcc"
 module_compile_args = ["-O3"]
 module_link_args =    ["-lgfortran", "-lblas", "-llapack"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
+autocompile_extra_files = True
 
 # ========================
 #      fmodpy Globals     
@@ -199,15 +154,16 @@ FORT_TEXT_REPLACEMENTS = {
 }
 
 # Fortran parsing grammar definition
+PUBLIC_STATEMENT = "PUBLIC"
+PRIVATE_STATEMENT = "PRIVATE"
 IMMEDIATELY_EXCLUDE = ["PROGRAM"]
 ACCEPTABLE_PREFIXES = ["RECURSIVE", "PURE", "END", "ABSTRACT"]
-ACCEPTABLE_LINE_STARTS = ["MODULE", "USE", "SUBROUTINE", "FUNCTION", "INTERFACE"]
+ACCEPTABLE_LINE_STARTS = ["MODULE", "USE", "SUBROUTINE", "FUNCTION",
+                          "INTERFACE"] + [PUBLIC_STATEMENT, PRIVATE_STATEMENT]
 ABSTRACT_DECLARATIONS = ["PROCEDURE", "EXTERNAL"]
 ACCEPTABLE_DECLARATIONS = sorted(FORT_C_SIZE_MAP.keys()) + ABSTRACT_DECLARATIONS
 INTERFACE_START = "INTERFACE"
 INTERFACE_END = ["END","INTERFACE"]
-PRIVATE_STATEMENT = "PRIVATE"
-PUBLIC_STATEMENT = "PUBLIC"
 # 
 # Given the above globals, fmodpy supports the following grammar behaviors:
 # 
@@ -418,9 +374,10 @@ DEFAULT_NUMPY_ARRAY = "{name} = numpy.ones(shape=({dims}),dtype={type},order='F'
 CYTHON_DEFAULT_VALUE = "{name} = 1"
 CYTHON_TYPED_INIT = "cdef {type} {name} = {val}"
 # Statements for managing array inputs
+CYTHON_MISSING_OPT_ARRAY_SIZE = "1"
 CYTHON_ARRAY_CHECK = ("if (not numpy.asarray({0}).flags.f_contiguous):"+
                       CYTHON_LINE_SEP + CYTHON_INDENT +
-                      "raise(Exception('Only use numpy arrays"+
+                      "raise(NotFortranCompatible('Only use numpy arrays"+
                       " that are f_contiguous.'))" + CYTHON_LINE_SEP)
 CYTHON_DIM_NAME = "{name}_{dim}"
 CYTHON_DIM_DEF = "cdef " + FORT_C_SIZE_MAP["INTEGER"][DEFAULT_F_INT_SIZE] \
@@ -431,6 +388,8 @@ OPTIONAL_SUFFIX = "=None"
 CYTHON_HEADER = """
 import cython
 import numpy
+
+class NotFortranCompatible(Exception): pass
 """
 
 # 0 -- function name
@@ -503,10 +462,10 @@ cdef void c_{0}({1}):
 def run(command, **popen_kwargs):
     import sys, subprocess
     # For Python3.x ensure that the outputs are strings
-    if sys.version_info >= (3,0):
+    if sys.version_info >= (3,6):
         popen_kwargs.update( dict(encoding="UTF-8") )
-    proc = subprocess.Popen(command, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, **popen_kwargs)
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, **popen_kwargs)
     stdout, stderr = proc.communicate()
     if stdout: stdout = stdout.replace("\r","").split("\n")
     else:      stdout = ""
@@ -773,9 +732,9 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
             # Monitor the expression of "PRIVATE" inside a module
             if len(split_line[1:]) == 0:
                 is_private = True
-            elif "::" in split_line:
-                rest = split_line[split_line.index("::")+1:]
-                rest = [n.replace(",","") for n in rest if n.count(",")<len(n)]
+            elif ":" in split_line:
+                rest = split_line[-split_line[::-1].index(":"):]
+                while ("," in rest): rest.remove(",")
                 to_ignore += rest
         elif (len(split_line) > 0) and (split_line[0] == PUBLIC_STATEMENT):
             # Monitor the expression of "PUBLIC" inside a module
@@ -940,7 +899,7 @@ def evaluate_sizes(modules, args, working_dir):
     os.chdir(original_dir)
     # Check for status
     if return_code != 0:
-        message = "Failed to compile get size program, received the following:\n"
+        message = "Failed to compile get size program, received the following:\n\n"
         error_string = "\n".join(stderr)
         # If it was an unexpected error, raise that to user.
         if "Fatal" not in error_string:
@@ -1077,12 +1036,20 @@ def arg_to_is_present(arg, all_args={}):
 
 # Return true if the given argument can be optional
 def arg_is_optional(arg, all_args={}):
-    is_optional = arg[ARG_OPTIONAL] or (arg[ARG_INTENT] == "OUT") or arg[ARG_RETURNED]
-    if len(arg[ARG_DIM]) > 0:
-        for d in arg[ARG_DIM]:
-            if (d in ["*", ":"]) or (len(d) == 0):
-                is_optional = False
-                break
+    is_optional = False
+    if arg[ARG_OPTIONAL]:
+        # If the arg is optional in fortran, it must be optional
+        is_optional = True
+    elif ((arg[ARG_INTENT] == "OUT") or arg[ARG_RETURNED]):
+        # If the argument is output, it can only be optional if the
+        # shape is known (because memory space must be allocated)
+        is_optional = True
+        if len(arg[ARG_DIM]) > 0:
+            for d in arg[ARG_DIM]:
+                if (d in ["*", ":"]) or (len(d) == 0):
+                    is_optional = False
+                    break
+
     return is_optional
 
 # ===============================================
@@ -1229,12 +1196,12 @@ def generate_call_code(provided, not_provided, optional,
         # assuming it is more likely a user does not want to assign
         # any of the optionals
         code = FORT_INDENT*(len(provided)+len(not_provided))
-        code += "IF (.NOT. %s) THEN"%(optional[0]) + FORT_LINE_SEPARATOR
-        code += generate_call_code(provided,not_provided+[optional[0]],
+        code += "IF (%s) THEN"%(optional[0]) + FORT_LINE_SEPARATOR
+        code += generate_call_code(provided+[optional[0]],not_provided,
                           optional[1:], sub_name, arguments, returned)
         code += FORT_INDENT*(len(provided)+len(not_provided))
         code += "ELSE" + FORT_LINE_SEPARATOR
-        code += generate_call_code(provided+[optional[0]],not_provided,
+        code += generate_call_code(provided,not_provided+[optional[0]],
                           optional[1:], sub_name, arguments, returned)
         code += FORT_INDENT*(len(provided)+len(not_provided))
         code += "ENDIF" + FORT_LINE_SEPARATOR
@@ -1253,6 +1220,7 @@ def arg_to_py_declaration(arg, all_args={}):
         string += "{0}_global = {0}".format(arg[ARG_NAME])
     # Adjust the name based on whether or not the argument is optional
     # and add code for initializing the optional value
+    local_name = arg[ARG_NAME]
     if arg_is_optional(arg):
         # Define the name, add the default declaration
         local_name = LOCAL_PREFIX + arg[ARG_NAME]
@@ -1268,7 +1236,8 @@ def arg_to_py_declaration(arg, all_args={}):
         if len(arg[ARG_DIM]) > 0:
             # Create an optional check that defines this variable
             string += DEFAULT_NUMPY_ARRAY.format(
-                name=arg[ARG_NAME], dims=",".join(arg[ARG_DIM]),
+                name=arg[ARG_NAME], dims=",".join(
+                    [CYTHON_MISSING_OPT_ARRAY_SIZE]*len(arg[ARG_DIM])),
                 type=FORT_PY_SIZE_MAP[arg[ARG_TYPE]][arg[ARG_SIZE]])
         else:
             string += CYTHON_DEFAULT_VALUE.format(name=arg[ARG_NAME])
@@ -1285,7 +1254,7 @@ def arg_to_py_declaration(arg, all_args={}):
     # define those c values as well
     dim_args = arg_to_needed_dim(arg)
     if len(dim_args) > 0:
-        string += CYTHON_ARRAY_CHECK.format(arg[ARG_NAME])
+        string += CYTHON_ARRAY_CHECK.format(local_name)
     for dname in dim_args:
         i = dname.split("_")[-1]
         string += CYTHON_DIM_DEF.format(
@@ -1637,7 +1606,7 @@ def prepare_working_directory(source_file, source_dir, project_name,
     if len(working_direcotry) == 0:
         working_dir = os.path.join(source_dir, FMODPY_DIR_PREFIX+project_name)
     else:
-        working_dir = working_direcotry
+        working_dir = os.path.abspath(os.path.expanduser(working_direcotry))
 
     # Generate the names of files that will be created by this
     # program, so that we can copy them to an "old" directory if necessary.
@@ -1790,6 +1759,55 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
             #     for line in doc: print("",line)
         print()
 
+    # ==============================================
+    #       Automatically Compile Extra Files       
+    #      (in case some are necessary modules)     
+    # ==============================================
+    if autocompile_extra_files:
+        # Store original directory to revert back after compilation
+        original_dir = os.getcwd()
+        os.chdir(working_dir)
+
+        # Try and compile the rest of the files (that might be fortran) in
+        # the working directory in case any are needed for linking.
+        for f in os.listdir():
+            f = f.strip()
+            # Skip the preprocessed file, the size program, and directories
+            if ( (PREPROCESSED_FORTRAN_FILE in f) or
+                 (GET_SIZE_PROG_FILE in f) or
+                 (os.path.isdir(f)) or
+                 ("f" not in AFTER_DOT(f)) ):
+                continue
+            # Make sure the file does not have any immediate exclusions,
+            # if it does then skip it
+            with open(f) as fort_file:
+                exclude_this_file = False
+                # Read through the file, look for exclusions
+                for line in fort_file.readlines():
+                    line = line.strip().upper().split()
+                    if (len(line) > 0) and (line[0] in IMMEDIATELY_EXCLUDE):
+                        exclude_this_file = True
+                        break
+                if exclude_this_file:
+                    if verbose:
+                        print(("FMODPY: Skipping '%s' because it contains "+
+                               "one of %s.")%(f, IMMEDIATELY_EXCLUDE))
+                    continue
+            # Try to compile all files that have "f" in the extension
+            if verbose: print("FMODPY: Compiling '%s'..."%(f))
+            code, stdout, stderr = run([fort_compiler,fort_compile_arg]+fort_compiler_options+[f])
+            if code != 0:
+                extra_message = ""
+                if any("module" in line for line in stderr):
+                    extra_message = "Consider pre-compiling all '.o' and '.mod' files necessary\n"+\
+                                    " for building the fortran-python module and running fmodpy\n"+\
+                                    " with the option 'autocompile_extra_files=False'.\n\n"
+                raise(CompileError("Unexpected error when automatically compiling '%s'.\n\n"%(f)+
+                                   extra_message+"\n".join(stderr)))
+                
+        # Revert to the original directory
+        os.chdir(original_dir)
+
     # =====================================================
     #      Evaluate the size (in bytes) of each of the     
     # arguments to determine the appropriate C types to use     
@@ -1851,31 +1869,6 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
                                     fort_compiler_options+[wrap_code])
     if wrap_code != 0:
         raise(CompileError("Error in generated wrapper (bug?)\n\n"+stderr))
-
-    # Try and compile the rest of the files (that might be fortran) in
-    # the working directory in case any are needed for linking.
-    for f in os.listdir():
-        f = f.strip()
-        # Skip the preprocessed file, the size program, and directories
-        if ( (file_name in f) or (mod_name+FORT_WRAPPER_EXT in f) or
-             (PREPROCESSED_FORTRAN_FILE in f) or
-             (GET_SIZE_PROG_FILE in f) or
-             (os.path.isdir(f)) or
-             ("f" not in AFTER_DOT(f)) ):
-            continue
-        # Make sure the file does not have any immediate exclusions,
-        # if it does then skip it
-        with open(f) as fort_file:
-            if any(any(line_start.upper() in IMMEDIATELY_EXCLUDE
-                       for line_start in line.strip().split()[:1]) 
-                   for line in fort_file): 
-                if verbose:
-                    print(("FMODPY: Skipping '%s' because it contains "+
-                           "one of %s.")%(f, IMMEDIATELY_EXCLUDE))
-                continue
-        # Try to compile all files that have "f" in the extension
-        if verbose: print("FMODPY: Compiling '%s'..."%(f))
-        run([fort_compiler,fort_compile_arg]+fort_compiler_options+[f])
 
     # Setup linking for creating the extension
     link_files = [f for f in os.listdir(working_dir) if 
@@ -2114,7 +2107,7 @@ if __name__ == "__main__":
 
     # Extract some of the few acceptable command line arguments
     if len(sys.argv) > 2:
-        print("COMMAND LINE CUSTOMIZATIONS:")
+        print("RECOGNIZED COMMAND LINE CUSTOMIZATIONS:")
     for a in sys.argv[2:]:
         for g_name in USER_MODIFIABLE_GLOBALS + wrap_parameters:
             if ((g_name+"=") in a[:len(g_name+"=")]):
@@ -2140,6 +2133,7 @@ if __name__ == "__main__":
         wrap_kwargs["requested_funcs"] = wrap_kwargs["requested_funcs"] + extra_args
         print("requested_funcs = %s -> %s"%([], wrap_kwargs["requested_funcs"]))
 
-
     # Call "wrap"
     wrap(file_path, **wrap_kwargs)
+
+

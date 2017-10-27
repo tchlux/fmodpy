@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # Read the version
     with open("version.txt") as f:
         version = f.read().strip()
-
+    
     #      Remove all of the wheel generated files     
     # =================================================
     run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
@@ -50,21 +50,22 @@ if __name__ == "__main__":
     #      Setup the python package as a universal wheel     
     # =======================================================
     run(["python3", "setup.py", "bdist_wheel"])
-
+    
     #      Remove any pyc files that are hidden away     
     # ===================================================
     run(["find", ".", "-name", '*.pyc', "-delete"])
-
+    
     #      Upload to github with version tag     
     # ===========================================
     run(["git", "push", "fmodpy", "master"])
     run(["git", "tag", "-a", version, "-m", notes])
     run(["git", "push", "--tags"])
-
+    
     #      Use twine to upload the package to PyPI     
     # =================================================
     run(["twine", "upload", "dist/*"])
-
+    
     #      Remove all of the wheel generated files     
     # =================================================
     run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
+    
