@@ -1974,6 +1974,8 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
 #                          input_fortran_file. If provided, it is
 #                          assumed that the directory should not be
 #                          removed automatically.
+#    output_direcotry   -- The directory to store the output python
+#                          module. Defaults to os.getcwd()
 #    verbose            -- True if you want updates and printouts
 #                          about the wrapping process.
 # 
@@ -2001,7 +2003,11 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
 # 
 def wrap(input_fortran_file, mod_name="", requested_funcs=[],
          force_rebuild=False, working_directory="",
-         verbose=False):
+         output_directory="", verbose=False):
+    # Set the default output directory
+    if len(output_directory) == 0:
+        output_directory = os.getcwd()
+
     source_file = os.path.basename(input_fortran_file)
     source_dir = os.path.dirname(os.path.abspath(input_fortran_file))
     if len(mod_name) == 0:
@@ -2053,12 +2059,16 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
     # Build the python module by compiling all components
     mod_path = build_mod(source_file, working_dir, mod_name, verbose=verbose)
 
-    # Copy out the module from the working_dir to the current dir
-    if (os.getcwd() != working_dir):
+    # Copy out the module from the working_dir to the output directory
+    if (output_directory != working_dir):
+        # Create the output directory if necessary
+        if not os.path.exists(output_directory):
+            os.makedirs(output_directory, exists_ok=True)
+        # Copy the module into the output directory
         shutil.copyfile(mod_path, os.path.join(
-            os.getcwd(),os.path.basename(mod_path)))
+            output_directory,os.path.basename(mod_path)))
         if verbose:
-            print("FMODPY: Copied python module to current working directory.")
+            print("FMODPY: Copied python module to '%s'."%(output_directory))
 
     if len(working_directory) == 0:
         # Remove the automatically created working directory
