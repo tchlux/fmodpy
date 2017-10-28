@@ -17,7 +17,7 @@ COMMAND LINE USAGE:
 
 # In case this program is executed in python 2.7
 from __future__ import print_function
-import re, os, shutil, importlib
+import re, os, sys, shutil, importlib
 
 # =====================================
 #      User customizable variables     
@@ -289,7 +289,7 @@ FORT_SUB_CALL = "CALL {0}({1})"
 # 0 - source function name
 # 1 - comma separated list of arguments for source function
 # 2 - local output storage variable
-FORT_FUN_CALL = "{2}%s = {0}({1})"%(FORT_FUNC_OUTPUT_SUFFIX)
+FORT_FUN_CALL = "{2} = {0}({1})"
 # 0 - Copy args and ranges (CHARACTER_COPY_INDEX_0 = 1:<size>, ...)
 # 1 - Receiving assignment character
 # 2 - Producing assignment character
@@ -460,7 +460,7 @@ cdef void c_{0}({1}):
 #   stderr      -- A list of strings that are the lines of stderr
 #                  produced by the execution of <command>
 def run(command, **popen_kwargs):
-    import sys, subprocess
+    import subprocess
     # For Python3.x ensure that the outputs are strings
     if sys.version_info >= (3,6):
         popen_kwargs.update( dict(encoding="UTF-8") )
@@ -732,18 +732,16 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
             # Monitor the expression of "PRIVATE" inside a module
             if len(split_line[1:]) == 0:
                 is_private = True
-            elif ":" in split_line:
-                rest = split_line[-split_line[::-1].index(":"):]
-                while ("," in rest): rest.remove(",")
-                to_ignore += rest
+            while ":" in split_line: split_line.remove(":")
+            while "," in split_line: split_line.remove(",")
+            to_ignore += split_line
         elif (len(split_line) > 0) and (split_line[0] == PUBLIC_STATEMENT):
             # Monitor the expression of "PUBLIC" inside a module
             if len(split_line[1:]) == 0:
                 is_private = False
-            elif ("::" in split_line):
-                rest = split_line[split_line.index("::")+1:]
-                rest = [n.replace(",","") for n in rest if n.count(",")<len(n)]
-                public_funcs += [f for f in rest if f not in public_funcs]
+            while ":" in split_line: split_line.remove(":")
+            while "," in split_line: split_line.remove(",")
+            public_funcs += split_line
         #      Processing Module / Subroutine / Function     
         # ===================================================
         elif (any(p in prefix for p in ACCEPTABLE_PREFIXES) or (
@@ -882,6 +880,7 @@ def evaluate_sizes(modules, args, working_dir):
         temp_arg[ARG_NAME] = a[ARG_NAME]
         temp_arg[ARG_TYPE] = a[ARG_TYPE]
         temp_arg[ARG_KIND] = a[ARG_KIND]
+        # Add the definition line and the evaluation line
         arg_defs.append( arg_to_string(temp_arg) )
         evaluations.append( GET_SIZE.format(temp_arg[ARG_NAME]) )
     # Third create a simple kind-testing fortran program
@@ -920,7 +919,7 @@ def evaluate_sizes(modules, args, working_dir):
         if len(line) != 2: continue
         arg_name, size = line
         for a in args:
-            if a[ARG_NAME] == arg_name: break
+            if (a[ARG_NAME] == arg_name): break
         else:
             raise SizeError("Bad argument name found '%s'."%(arg_name))
         a[ARG_SIZE] = size
@@ -1100,10 +1099,8 @@ def arg_to_fort_input(arg, all_args={}):
     # Add a c prefix to characters
     if arg[ARG_TYPE] in ["CHARACTER"]: prefix = C_PREFIX
     else:                              prefix = ""
-    if arg[ARG_RETURNED]: suffix = FORT_FUNC_OUTPUT_SUFFIX
-    else:                 suffix = ""
     # Add the actual argument itself
-    inputs.append( prefix + arg[ARG_NAME] + suffix )
+    inputs.append( prefix + arg[ARG_NAME] )
     # Add the optional extra if necessary
     inputs += arg_to_is_present(arg,all_args)
     return inputs
@@ -1134,20 +1131,12 @@ def arg_to_fort_declaration(arg, all_args={}):
         declarations.append( arg_to_string(temp_arg) )
     # Add the declaration of the local character array to file
     declarations.append( arg_to_string(arg) )
-    # Add the reference to the external function if necessary
-    if arg[ARG_RETURNED]:
-        declarations[-1] += FORT_FUNC_OUTPUT_SUFFIX
-        string = arg[ARG_TYPE]
-        if len(arg[ARG_KIND]) > 0:
-            string += "(KIND=%s)"%(arg[ARG_KIND])
-        string += ", EXTERNAL :: " + arg[ARG_NAME]
-        declarations.append(string)
     return declarations
 
 # Given an argument, generate a copy if it is needed
 def arg_to_fort_copy_in(arg, all_args={}):
     string = ""
-    if ( (arg[ARG_TYPE] in ["CHARACTER"]) and 
+    if ( (arg[ARG_TYPE] in ["CHARACTER"]) and (len(arg[ARG_DIM]) > 0) and
          (("IN" in arg[ARG_INTENT]) or (arg[ARG_INTENT] == "")) ):
         iterators, char_index_str, char_src_index = arg_to_fort_copy_args(arg, all_args)
         # Combine all into the copy block
@@ -1162,7 +1151,7 @@ def arg_to_fort_call(arg, all_args={}):
 # Given an argument, generate a copy if it is needed
 def arg_to_fort_copy_out(arg, all_args={}):
     string = ""
-    if ( (arg[ARG_TYPE] in ["CHARACTER"]) and 
+    if ( (arg[ARG_TYPE] in ["CHARACTER"]) and (len(arg[ARG_DIM]) > 0) and
          (("OUT" in arg[ARG_INTENT]) or (arg[ARG_INTENT] == "")) ):
         iterators, char_index_str, char_src_index = arg_to_fort_copy_args(arg, all_args)
         # Combine all into the copy block
@@ -1678,11 +1667,16 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                       requested_funcs=None, verbose=True):
     if (requested_funcs) == type(None):
         requested_funcs = []
+    # Convert the list of requested funcs to all upper case for consistency
+    for i in range(len(requested_funcs)): 
+        requested_funcs[i] = requested_funcs[i].upper()
 
     # Open the input code as a file
     in_file = open(fortran_file_path, "r")
     # Get a cleaned preprocessed version of the input file
     fort_file = preprocess_fortran_file(in_file, verbose=verbose, save_dir=working_dir)
+    # Capture a boolean to know if it's old fortran or modern fortran
+    is_old_fortran = AFTER_DOT(os.path.basename(fortran_file_path)) == "f"
     # Identify functions and arguments     
     modules, funcs_and_args, interfaces, documentation = (
         extract_funcs_and_args(fort_file, requested_funcs) )
@@ -1696,21 +1690,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
 
     #      Clean up the set of functions     
     # =======================================
-    for func in interfaces:
-        for arg in interfaces[func]:
-            message = ""
-            for d in arg[ARG_DIM]:
-                if d in ["*", ":"]:
-                    raise(NotSupportedError((
-                        "External procedure '%s' cannot take assumed"+
-                        " shape / size array '%s' as an argument.\n "+
-                        "Consider passing size as extra argument.")%(
-                            func,arg[ARG_NAME])))
-            if (not arg[ARG_DEFINED]) and (func not in to_remove):
-                raise(FortranError(
-                    "Could not locate argument definition for "+
-                    "'%s' in interface '%s'."%(arg[ARG_NAME], func)))
-
+    used_interfaces = []
     # Define arguments using implicit types, un-define arguments that
     # are of unrecognized types.
     for func in funcs_and_args:
@@ -1720,13 +1700,36 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                 arg[ARG_TYPE] = FORT_IMPLICIT_TYPE(arg[ARG_NAME])
                 arg[ARG_MESSAGE] = "  !! Warning !! Not defined, using implicit type '%s'."%(arg[ARG_TYPE])
             # Remove intent from ARG_RETURNED arguments for functions
-            if arg[ARG_RETURNED]: arg[ARG_INTENT] = ""
+            if arg[ARG_RETURNED]: 
+                arg[ARG_NAME] = arg[ARG_NAME] + FORT_FUNC_OUTPUT_SUFFIX
+                arg[ARG_INTENT] = ""
+            # Remove dimensions from arrays for old fortran (because
+            # old fortran doesn't have assumed shape)
+            if (is_old_fortran and (len(arg[ARG_DIM]) > 0)):
+                arg[ARG_DIM] = ["*"]
             # Try to resolve "external" declarations
             if arg[ARG_TYPE] in ["EXTERNAL"]:
                 if (arg[ARG_NAME] in interfaces):
                     arg[ARG_TYPE] = "PROCEDURE"
                     arg[ARG_KIND] = arg[ARG_NAME] + FORT_INTERFACE_SUFFIX
                     arg[ARG_INTERFACE] = interfaces[arg[ARG_NAME]]
+                    # Check to make sure the interface is legal
+                    for i_arg in interfaces[func]:
+                        message = ""
+                        for d in i_arg[ARG_DIM]:
+                            if d in ["*", ":"]:
+                                raise(NotSupportedError((
+                                    "External procedure '%s' cannot take assumed"+
+                                    " shape / size array '%s' as an argument.\n "+
+                                    "Consider passing size as extra argument.")%(
+                                        func,i_arg[ARG_NAME])))
+                        if (not i_arg[ARG_DEFINED]) and (func not in to_remove):
+                            raise(FortranError(
+                                "Could not locate argument definition for "+
+                                "'%s' in interface '%s'."%(i_arg[ARG_NAME], func)))
+                    # Track which interfaces are used (and should be wrapped)
+                    if arg[ARG_NAME] not in used_interfaces:
+                        used_interfaces
                 else:
                     raise(FortranError(
                         ("External procedure argument '%s' in '%s' does not "+
@@ -1741,6 +1744,9 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                 raise(FortranError(
                     "Could not locate argument definition for "+
                     "'%s' argument in '%s'."%(arg[ARG_NAME], func)))
+
+    # Reduce the set of interfaces to those which are usable from python
+    interfaces = {iface:interfaces[iface] for iface in used_interfaces}
 
     #      Print out the set of functions     
     # ========================================
@@ -1770,6 +1776,8 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
 
         # Try and compile the rest of the files (that might be fortran) in
         # the working directory in case any are needed for linking.
+        should_compile = []
+        # Generate the list of files that we sould try to autocompile
         for f in os.listdir():
             f = f.strip()
             # Skip the preprocessed file, the size program, and directories
@@ -1793,29 +1801,39 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                         print(("FMODPY: Skipping '%s' because it contains "+
                                "one of %s.")%(f, IMMEDIATELY_EXCLUDE))
                     continue
-            # Try to compile all files that have "f" in the extension
-            if verbose: print("FMODPY: Compiling '%s'..."%(f))
-            code, stdout, stderr = run([fort_compiler,fort_compile_arg]+fort_compiler_options+[f])
-            if code != 0:
-                extra_message = ""
-                if any("module" in line for line in stderr):
-                    extra_message = "Consider pre-compiling all '.o' and '.mod' files necessary\n"+\
-                                    " for building the fortran-python module and running fmodpy\n"+\
-                                    " with the option 'autocompile_extra_files=False'.\n\n"
-                raise(CompileError("Unexpected error when automatically compiling '%s'.\n\n"%(f)+
-                                   extra_message+"\n".join(stderr)))
-                
+            should_compile.append(f)
+        # Handle dependencies by doing rounds of compilation, presuming
+        # only files with fewest dependencies will compile first
+        successes = [None]
+        # Continue rounds until (everything compiled) or (no success)
+        while (len(should_compile) > 0) and (len(successes) > 0):
+            successes = []
+            for f in should_compile:
+                # Try to compile all files that have "f" in the extension
+                if verbose: print("FMODPY: Compiling '%s'..."%(f))
+                code, stdout, stderr = run([fort_compiler,fort_compile_arg]+fort_compiler_options+[f])
+                if code == 0: successes.append(f)
+            # Remove the files that were successfully compiled from
+            # the list of "should_compile"
+            for f in successes:
+                should_compile.remove(f)
         # Revert to the original directory
         os.chdir(original_dir)
+
+    if verbose:
+        print("FMODPY: Evaluating byte-sizes of fortran arguments...")
 
     # =====================================================
     #      Evaluate the size (in bytes) of each of the     
     # arguments to determine the appropriate C types to use     
     # =====================================================
-    for arguments in funcs_and_args.values():
-        evaluate_sizes(modules, arguments, working_dir)
-    for arguments in interfaces.values():
-        evaluate_sizes(modules, arguments, working_dir)
+    for func in funcs_and_args:
+        evaluate_sizes(modules, funcs_and_args[func], working_dir)
+    for func in interfaces:
+        evaluate_sizes(modules, interfaces[func], working_dir)
+
+    if verbose:
+        print("FMODPY: Generating the c-compatible fortran wrapper...")
 
     #      Generate C <-> Fortran wrapper     
     # ========================================
@@ -1825,6 +1843,9 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
     if not os.path.exists(fort_wrapper_file):
         with open(fort_wrapper_file,"w") as f:
             print(fort_c_wrapper, file=f)
+
+    if verbose:
+        print("FMODPY: Generating the python-compatible c wrapper...")
 
     #      Generate Python <-> C     
     # ===============================
@@ -1844,7 +1865,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
 def build_mod(file_name, working_dir, mod_name, verbose=True):
     ##################################################
     # These imports are only needed for this function!
-    import numpy, sys, sysconfig
+    import numpy, sysconfig
     from distutils.extension import Extension
     from distutils.core import setup
     from Cython.Build import cythonize
@@ -1868,7 +1889,8 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
     wrap_code, stdout, stderr = run([fort_compiler,fort_compile_arg]+
                                     fort_compiler_options+[wrap_code])
     if wrap_code != 0:
-        raise(CompileError("Error in generated wrapper (bug?)\n\n"+stderr))
+        print("\n".join(stderr))
+        raise(CompileError("\nError in generated wrapper (fmodpy bug?)\n"))
 
     # Setup linking for creating the extension
     link_files = [f for f in os.listdir(working_dir) if 
@@ -2022,14 +2044,10 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
         working_dir_name = FMODPY_DIR_PREFIX+mod_name
         working_dir = os.path.join(source_dir, working_dir_name)
 
-    # # If the user seems to have run fmodpy inside of an fmodpy project
-    # # file without setting the working directory, automatically set it
-    # # (to save headache of creating another child directory)
-    # if ((FMODPY_DIR_PREFIX+mod_name) in os.path.basename(os.getcwd()) and
-    #     (len(working_directory) == 0)):
-    #     working_directory = os.getcwd()
-
     # Get the last modification time of the module (if it exists already)
+    # Make sure that the output directory is in the sys path so that
+    # the time-check import will work correctly.
+    sys.path = [output_directory] + sys.path
     try:
         mod = importlib.import_module(mod_name)
         module_mod_time = os.path.getmtime(mod.__file__)
@@ -2039,6 +2057,8 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
     except:
         # TODO: Existing module was corrupt, should we warn the user or ignore?
         module_mod_time = 0
+    # Reset the sys path
+    sys.path = sys.path[1:]
 
     # Exit if the module has been built since the last update of the
     # source file and the user does *not* want to force a reconstruction.
@@ -2092,7 +2112,7 @@ USER_MODIFIABLE_GLOBALS = [n for n,v in globals().items() if
 
 # Making this module accessible by being called directly from command line.
 if __name__ == "__main__":
-    import sys, traceback, inspect 
+    import traceback, inspect 
 
     if len(sys.argv) < 2:
         print(__doc__)

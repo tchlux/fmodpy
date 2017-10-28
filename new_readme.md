@@ -52,7 +52,7 @@
 |Version and Date       | Description           |
 |-----------------------|-----------------------|
 | 0.0.0<br>October 2017 | First release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. Supports Python2.7 and Python3.x. |
-| 0.0.6<br>October 2017 | Added 'output_directory' argument, auto-compilation <br> will now work if all dependencies are in the source <br> directory, made F77 '.f' files collapse multi-dim <br> arrays to single dimension. |
+| 0.0.5<br>October 2017 | A long string that is testing my program's ability to <br> combine this into a meaningful comment block and also seeing <br> if the date comes out right. |
 
 
 ## UPCOMING (checked means in development):
