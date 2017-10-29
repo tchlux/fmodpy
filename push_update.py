@@ -33,6 +33,8 @@ def run(command, **popen_kwargs):
     else:
         print("\n".join(stdout))
 
+
+DRY_RUN = False
 if __name__ == "__main__":
     import sys, datetime
     if len(sys.argv) >= 2:
@@ -47,64 +49,67 @@ if __name__ == "__main__":
     # =================================================
     run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
 
-    #      Update the readme with the notes for this update     
-    # ==========================================================
-    max_comment_length = 52
-    formatted_comment = notes.split()
-    start = 0
-    curr = 1
-    while (curr < len(formatted_comment)):
-        if len(" ".join(formatted_comment[start:curr+1])) > max_comment_length:
-            formatted_comment.insert(curr, "<br>")
-            start = curr+1
-        curr += 1
-    formatted_comment = " ".join(formatted_comment)
-    # Insert the comment into the table in the readme
-    contents = []
-    inserted = False
-    found_top_of_version_block = False
-    with open("readme.md") as f:
-        for line in f:
-            if not inserted:
-                search = line.strip()
-                if ("Version and Date" in search) and ("Description" in search):
-                    found_top_of_version_block = True
-                if ((len(search) == 0) and found_top_of_version_block):
-                    month = datetime.datetime.now().strftime("%B")
-                    year = datetime.datetime.now().strftime("%Y")
-                    time = version +"<br>"+ month +" "+ year
-                    contents.append(
-                        "| %s | %s |\n"%(time, formatted_comment) )
-                    # Insert the new information
-                    inserted = True
-                    print(contents[-1])
-            # Add the line to the output
-            contents.append(line)
-    with open("readme.md", "w") as f:
-        f.write("".join(contents))
+    if not DRY_RUN:
+        #      Update the readme with the notes for this update     
+        # ==========================================================
+        max_comment_length = 52
+        formatted_comment = notes.split()
+        start = 0
+        curr = 1
+        while (curr < len(formatted_comment)):
+            if len(" ".join(formatted_comment[start:curr+1])) > max_comment_length:
+                formatted_comment.insert(curr, "<br>")
+                start = curr+1
+            curr += 1
+        formatted_comment = " ".join(formatted_comment)
+        # Insert the comment into the table in the readme
+        contents = []
+        inserted = False
+        found_top_of_version_block = False
+        with open("readme.md") as f:
+            for line in f:
+                if not inserted:
+                    search = line.strip()
+                    if ("Version and Date" in search) and ("Description" in search):
+                        found_top_of_version_block = True
+                    if ((len(search) == 0) and found_top_of_version_block):
+                        month = datetime.datetime.now().strftime("%B")
+                        year = datetime.datetime.now().strftime("%Y")
+                        time = version +"<br>"+ month +" "+ year
+                        contents.append(
+                            "| %s | %s |\n"%(time, formatted_comment) )
+                        # Insert the new information
+                        inserted = True
+                        print(contents[-1])
+                # Add the line to the output
+                contents.append(line)
+        with open("readme.md", "w") as f:
+            f.write("".join(contents))
 
-    #      Upload to github with version tag     
-    # ===========================================
-    run(["git", "add", "*"])
-    run(["git", "commit", "-a", "-m", notes])
-    run(["git", "push", "fmodpy", "master"])
-    run(["git", "tag", "-a", version, "-m", notes])
-    run(["git", "push", "--tags"])
+        #      Upload to github with version tag     
+        # ===========================================
+        run(["git", "add", "*"])
+        run(["git", "commit", "-a", "-m", notes])
+        run(["git", "push", "fmodpy", "master"])
+        run(["git", "tag", "-a", version, "-m", notes])
+        run(["git", "push", "--tags"])
 
     #      Setup the python package as a universal wheel     
     # =======================================================
-    run(["python3", "setup.py", "bdist_wheel"])
+    run(["python3", "setup.py", "sdist"])
+    # run(["python3", "setup.py", "bdist_wheel"])
     
-    #      Remove any pyc files that are hidden away     
-    # ===================================================
-    run(["find", ".", "-name", '*.pyc', "-delete"])
-    run(["find", ".", "-name", '__pycache__', "-delete"])
-    
-    #      Use twine to upload the package to PyPI     
-    # =================================================
-    run(["twine", "upload", "dist/*"])
-    
-    #      Remove all of the wheel generated files     
-    # =================================================
-    run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
-    
+    if not DRY_RUN:
+        #      Remove any pyc files that are hidden away     
+        # ===================================================
+        run(["find", ".", "-name", '*.pyc', "-delete"])
+        run(["find", ".", "-name", '__pycache__', "-delete"])
+
+        #      Use twine to upload the package to PyPI     
+        # =================================================
+        run(["twine", "upload", "dist/*"])
+
+        #      Remove all of the wheel generated files     
+        # =================================================
+        run(["rm", "-rf", "dist", "build", "fmodpy.egg-info"])
+

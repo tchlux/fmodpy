@@ -9,7 +9,7 @@ setup(
     name='fmodpy',
     # packages=['fmodpy'],
     packages=find_packages(exclude=[]),
-    install_requires=['numpy>=1.11'],
+    install_requires=['numpy>=1.11', 'cython>=27.1'],
     version=version,
     url = 'https://github.com/tchlux/fmodpy',
     download_url = 'https://github.com/tchlux/fmodpy/archive/{version}.tar.gz'.format(version=version),
