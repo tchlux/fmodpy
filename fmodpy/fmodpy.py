@@ -29,7 +29,7 @@ fort_compiler_options = ["-fPIC", "-O3"]
 c_linker = "gcc"
 c_compiler = None #"gcc"
 module_compile_args = ["-O3"]
-module_link_args =    ["-lgfortran", "-lblas", "-llapack"]
+module_link_args =    ["-lblas", "-llapack", "-lgfortran"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
 autocompile_extra_files = True
 
@@ -461,16 +461,23 @@ cdef void c_{0}({1}):
 #                  produced by the execution of <command>
 def run(command, **popen_kwargs):
     import subprocess
-    # For Python3.x ensure that the outputs are strings
+    # For Python 2.x the encoding is a string by default
+    # For Python 3.6 and later the encoding can be given as an arguemnt
     if sys.version_info >= (3,6):
         popen_kwargs.update( dict(encoding="UTF-8") )
     proc = subprocess.Popen(command, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, **popen_kwargs)
     stdout, stderr = proc.communicate()
+    # Before python 3.6, the encoding had to be handled after collection
+    if ((sys.version_info >= (3,)) and (sys.version_info[0] == 3)):
+        if (type(stdout) != str): stdout = str(stdout, encoding="UTF-8")
+        if (type(stderr) != str): stderr = str(stderr, encoding="UTF-8")
+    # Remove windows specific characters and split by the new line
     if stdout: stdout = stdout.replace("\r","").split("\n")
     else:      stdout = ""
     if stderr: stderr = stderr.replace("\r","").split("\n")
     else:      stderr = ""
+    # Return the exit code, standard out, and standard error
     return proc.returncode, stdout, stderr
 
 
@@ -1916,7 +1923,7 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
     ext_modules = [ Extension(
         mod_name, cython_source,
         extra_compile_args=module_compile_args,
-        extra_link_args=module_link_args + link_files,
+        extra_link_args=link_files + module_link_args,
         include_dirs = [numpy.get_include()])]
 
     if verbose:
