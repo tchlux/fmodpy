@@ -13,8 +13,9 @@ def read(f_name, dir_name="about"):
     text = []
     with open(os.path.join(dir_name, f_name)) as f:
         for line in f:
-            if line[0] != "#":
-                text.append(line.strip())
+            line = line.strip()
+            if (len(line) > 0) and (line[0] != "#"):
+                text.append(line)
     return text
 
 if __name__ == "__main__":
