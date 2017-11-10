@@ -55,6 +55,7 @@
 | 0.0.6<br>October 2017 | Added 'output_directory' argument, auto-compilation <br> will now work if all dependencies are in the source <br> directory, made F77 '.f' files collapse multi-dim <br> arrays to single dimension. |
 | 0.0.6<br>October 2017 | Testing sdist distribution instead of wheel. |
 | 0.0.6<br>November 2017 | Most recent version. See git for details. |
+| 0.0.7<br>November 2017 | Most recent version. See git for details. |
 
 
 ## UPCOMING (checked means in development):
