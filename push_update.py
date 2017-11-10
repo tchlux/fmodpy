@@ -27,7 +27,7 @@ def run(command, **popen_kwargs):
         print("\n".join(stdout))
 
 
-DRY_RUN = True
+DRY_RUN = False
 CLEAN_BEFORE = True
 UPDATE_README = not DRY_RUN
 GIT_UPDATE = not DRY_RUN
