@@ -17,7 +17,7 @@ COMMAND LINE USAGE:
 
 # In case this program is executed in python 2.7
 from __future__ import print_function
-import re, os, sys, shutil, importlib
+import re, os, sys, shutil, importlib, inspect
 
 # =====================================
 #      User customizable variables     
@@ -29,7 +29,7 @@ fort_compiler_options = ["-fPIC", "-O3"]
 c_linker = "gcc"
 c_compiler = None #"gcc"
 module_compile_args = ["-O3"]
-module_link_args =    ["-lblas", "-llapack", "-lgfortran"]
+module_link_args =    ["-lgfortran"] # ["-lblas", "-llapack", "-lgfortran"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
 autocompile_extra_files = True
 
@@ -199,7 +199,9 @@ LEGAL_MODULE_NAME = lambda name: (name.replace("_","")[0].isalpha() and
 # File related maniplation arguments
 CYTHON_EXT = ".pyx"
 FMODPY_DIR_PREFIX = "fmodpy_"
-FORT_WRAPPER_EXT = "_wrapper.f90"
+FORT_FILE_EXT = ".f90"
+FORT_WRAPPER_SUFFIX = "_wrapper"
+FORT_WRAPPER_EXT = FORT_WRAPPER_SUFFIX + FORT_FILE_EXT
 OLD_PROJECT_PREFIX = "OLD-fmodpy_"
 OLD_PROJECT_NAME = lambda name,num: OLD_PROJECT_PREFIX+name+"(%i)"%num
 PREPROCESSED_FORTRAN_FILE = "simplified_fortran.f90"
@@ -714,6 +716,9 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
         while (len(split_line) > 0) and (split_line[0] in ACCEPTABLE_PREFIXES):
             prefix.append(split_line[0])
             split_line = split_line[1:]
+
+        # TODO: Capture descriptions of custom data types so they can
+        #       be created as structs in C (and classes in python).
 
         #      Processing Interfaces     
         # ===============================
@@ -1656,7 +1661,11 @@ def prepare_working_directory(source_file, source_dir, project_name,
     if source_dir != working_dir:
         for f in os.listdir(source_dir):
             source = os.path.join(source_dir,f)
-            if not os.path.isdir(source):
+            extension = AFTER_DOT(f)
+            # maybe_relavent = ("f" in extension) or (extension in {"mod", "o"})
+            is_directory = os.path.isdir(source)
+            is_py_module = (f[-3] == ".so")
+            if not (is_directory or is_py_module):
                 destination = os.path.join(working_dir,f)
                 if verbose:
                     print("FMODPY: Copying '%s' to '%s'"%(source, destination))
@@ -1793,21 +1802,34 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                  (os.path.isdir(f)) or
                  ("f" not in AFTER_DOT(f)) ):
                 continue
-            # Make sure the file does not have any immediate exclusions,
-            # if it does then skip it
-            with open(f) as fort_file:
-                exclude_this_file = False
-                # Read through the file, look for exclusions
-                for line in fort_file.readlines():
-                    line = line.strip().upper().split()
-                    if (len(line) > 0) and (line[0] in IMMEDIATELY_EXCLUDE):
-                        exclude_this_file = True
-                        break
-                if exclude_this_file:
-                    if verbose:
-                        print(("FMODPY: Skipping '%s' because it contains "+
-                               "one of %s.")%(f, IMMEDIATELY_EXCLUDE))
-                    continue
+
+            # Try opening the file, if it can't be decoded, then skip
+            try:
+                # Make sure the file does not have any immediate exclusions,
+                # if it does then skip it
+                with open(f) as fort_file:
+                    exclude_this_file = False
+                    # Read through the file, look for exclusions
+                    for line in fort_file.readlines():
+                        line = line.strip().upper().split()
+                        if (len(line) > 0) and (line[0] in IMMEDIATELY_EXCLUDE):
+                            exclude_this_file = True
+                            break
+                    if exclude_this_file:
+                        if verbose:
+                            print(("FMODPY: Skipping '%s' because it contains "+
+                                   "one of %s.")%(f, IMMEDIATELY_EXCLUDE))
+                        continue
+            except:
+                # Some failure occurred while reading that file, skip it
+                # TODO: If the failure occurred when attempting to
+                #       compile a module that is necessary, then the
+                #       error message provided will say 'there is no
+                #       <name>.mod', when really it should warn the
+                #       user that the automatic compilation of the
+                #       module itself failed.
+                continue
+            # No failures or obvious red-flags, this file might be useful
             should_compile.append(f)
         # Handle dependencies by doing rounds of compilation, presuming
         # only files with fewest dependencies will compile first
@@ -1927,7 +1949,7 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
         include_dirs = [numpy.get_include()])]
 
     if verbose:
-        print("FMODPY: Compiling extension module using, calling setup...")
+        print("FMODPY: Compiling extension module using setup...")
         print("="*70)
         print()
     else:
@@ -1963,10 +1985,11 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
         # Second, try loading the newly created module
         sys.path = [working_dir]
         module = importlib.import_module(mod_name)
-        module_path = os.path.abspath(module.__file__)
-        # Finally, remove the imported module (so the user can
+        # In case the module was already imported, reload it so that
+        # the one left in memory is the most recent (so the user can
         # correctly import it later without any trouble)
-        del sys.modules[mod_name]
+        module = importlib.reload(module)
+        module_path = os.path.abspath(module.__file__)
     except ImportError:
         raise(LinkError("\nUnable to successfully import module.\n Perhaps the "+
                         "relevant fortran modules were not available?"))
@@ -2033,6 +2056,8 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
 def wrap(input_fortran_file, mod_name="", requested_funcs=[],
          force_rebuild=False, working_directory="",
          output_directory="", verbose=False):
+    # TODO: Add **kwargs that captures any global settings temporarily
+    #       for this execution of the function.
     # Set the default output directory
     if len(output_directory) == 0:
         output_directory = os.getcwd()
@@ -2056,14 +2081,15 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
     # the time-check import will work correctly.
     sys.path = [output_directory] + sys.path
     try:
+        # Import the module, get the modification time
         mod = importlib.import_module(mod_name)
         module_mod_time = os.path.getmtime(mod.__file__)
     except ImportError:
-        mod = None
         module_mod_time = 0
     except:
         # TODO: Existing module was corrupt, should we warn the user or ignore?
         module_mod_time = 0
+
     # Reset the sys path
     sys.path = sys.path[1:]
 
@@ -2073,7 +2099,7 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
     if (not force_rebuild) and (source_file_mod_time < module_mod_time):
         if verbose:
             print("FMODPY: No new modifications to '%s' module, exiting."%(mod_name))
-        return
+        return mod_name
 
     # Prepare (create) the working directory, copy in necessary files
     working_dir = prepare_working_directory(
@@ -2091,9 +2117,13 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
         # Create the output directory if necessary
         if not os.path.exists(output_directory):
             os.makedirs(output_directory, exists_ok=True)
+        mod_destination = os.path.join(
+            output_directory,os.path.basename(mod_path))
+        if os.path.exists(mod_destination):
+            if verbose: print("FMODPY: Removing old fortran python module.")
+            os.remove(mod_destination)
         # Copy the module into the output directory
-        shutil.copyfile(mod_path, os.path.join(
-            output_directory,os.path.basename(mod_path)))
+        shutil.copyfile(mod_path, mod_destination)
         if verbose:
             print("FMODPY: Copied python module to '%s'."%(output_directory))
 
@@ -2103,6 +2133,41 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
         if verbose:
             print("FMODPY: Removed working directory.")
             print()
+    else:
+        if verbose:
+            print("FMODPY: Leaving working directory, cleaning up.")
+        # If the user is keeping the working directory, remove
+        # compiled files so they will not be accidentally re-used
+        # after modifications are made to the sources.
+        for f_name in os.listdir(working_directory):
+            is_created_file = (f_name in {GET_SIZE_PROG_FILE,
+                                          GET_SIZE_EXECUTABLE, 
+                                          PREPROCESSED_FORTRAN_FILE})
+            is_project_file = (BEFORE_DOT(f_name).replace(FORT_WRAPPER_SUFFIX,"")
+                               == mod_name)
+            is_compiled_out = AFTER_DOT(f_name) in ["mod", "o", "c"]
+            if ((is_project_file and is_compiled_out) or (is_created_file)):
+                if verbose:
+                    print("FMODPY: Removing compiled file '%s'."%(f_name))
+                path = os.path.join(working_directory, f_name)
+                os.remove(path)
+    # Return the module name in case the user cares (but not necessary)
+    return mod_name
+
+# Wrap a fortran file as a module and return the module (to be named
+# via equals assignment). All arguments are identical to those for def
+# "wrap".
+def fimport(*args, **kwargs):
+    mod_name = wrap(*args, **kwargs)
+    return importlib.import_module(mod_name)
+
+# Set the documentation and signature for fimport to be the same as wrap
+_documentation = "\n".join([line.lstrip("#") for line in
+                            inspect.getcomments(fimport).split("\n")])
+_documentation += "\n".join(['']+[line.lstrip("#") for line in
+                            inspect.getcomments(wrap).split("\n")])
+fimport.__signature__ = inspect.signature(wrap)
+fimport.__doc__ = _documentation
 
 # These must be the last declared globals for them to include
 # everything, allows for automatically parsing command line arguments
@@ -2114,12 +2179,12 @@ USER_GLOBAL_CASTS = {
     bool       : lambda s: bool(s.lower().strip("false").replace("0","")),
 }
 USER_MODIFIABLE_GLOBALS = [n for n,v in globals().items() if
-                           (n.lower() == n) and (n[:2] != "__") and
+                           (n.lower() == n) and (n[:1] != "_") and
                            (type(v) in USER_GLOBAL_CASTS)]
 
 # Making this module accessible by being called directly from command line.
 if __name__ == "__main__":
-    import traceback, inspect 
+    import traceback
 
     if len(sys.argv) < 2:
         print(__doc__)
