@@ -2060,7 +2060,7 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
     # for this execution of the function.
     for arg_name in kwargs:
         if (arg_name in globals()):
-            globals()[g_name] = kwargs[arg_name]
+            globals()[arg_name] = kwargs[arg_name]
     # Set the default output directory
     if len(output_directory) == 0:
         output_directory = os.getcwd()
