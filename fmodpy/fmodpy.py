@@ -33,6 +33,13 @@ module_link_args =    ["-lgfortran"] # ["-lblas", "-llapack", "-lgfortran"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
 autocompile_extra_files = True
 
+# TODO:  Automatically add the "-lblas" and "-llapack" options if a
+#        recognizable compile error appears? Not sure if this is possible
+# TODO:  Automatically add "-lgfortran" to the user list of compile
+#        options because they may not be aware that is necessary
+# TODO:  Check to make sure all functions requested are available in
+#        the most recent compilation. If not, recompile.
+
 # ========================
 #      fmodpy Globals     
 # ========================
@@ -198,9 +205,11 @@ LEGAL_MODULE_NAME = lambda name: (name.replace("_","")[0].isalpha() and
                                   (len(name) > 0))
 # File related maniplation arguments
 CYTHON_EXT = ".pyx"
+CYTHON_SUFFIX = ""
+# CYTHON_SUFFIX = "_py_to_c"
 FMODPY_DIR_PREFIX = "fmodpy_"
 FORT_FILE_EXT = ".f90"
-FORT_WRAPPER_SUFFIX = "_wrapper"
+FORT_WRAPPER_SUFFIX = "_c_to_f"
 FORT_WRAPPER_EXT = FORT_WRAPPER_SUFFIX + FORT_FILE_EXT
 OLD_PROJECT_PREFIX = "OLD-fmodpy_"
 OLD_PROJECT_NAME = lambda name,num: OLD_PROJECT_PREFIX+name+"(%i)"%num
@@ -329,7 +338,9 @@ def UBOUND_TO_NUMPY(contents):
     first_arg = contents[start_index:comma_index]
     second_arg = contents[comma_index+len(","):index]
     after_call = contents[index+len(")"):]
-    func_replacement = "{name}.shape[{dim}-1]".format(
+    try:    second_arg = str(int(second_arg) - 1)
+    except: second_arg += "-1"
+    func_replacement = "{name}.shape[{dim}]".format(
         name=first_arg, dim=second_arg).lower()
     return before_call + func_replacement + after_call
 
@@ -352,7 +363,9 @@ def SIZE_TO_NUMPY(contents):
         func_replacement = "{name}.size".format(name=name).lower()
     else:
         name, dim = argument.split(",")[:2]
-        func_replacement = "{name}.shape[{dim}-1]".format(name=name, dim=dim).lower()
+        try:    dim = str(int(dim) - 1)
+        except: dim += "-1"
+        func_replacement = "{name}.shape[{dim}]".format(name=name, dim=dim).lower()
     return before_call + func_replacement + after_call
 
 
@@ -878,7 +891,7 @@ def preprocess_fortran_file(in_file, verbose=False, save_dir=""):
 # Given a list of arguments, use a compiled fortran program (default
 # compiler) to collect the results of "SIZEOF(arg)" for verifying the
 # correct level of precision when transferring from python -> fortran
-def evaluate_sizes(modules, args, working_dir):
+def evaluate_sizes(modules, args, working_dir, errors):
     # First get a list of all modules that need to be included
     module_names = FORT_MOD_LINE_BREAK.join([FORT_USE_MOD_LINE%m
                                              for m in modules[::-1]])
@@ -920,6 +933,10 @@ def evaluate_sizes(modules, args, working_dir):
         error_string = error_string[error_string.index("Fatal"):].split("\n")[0]
         error_string = error_string.replace(" at (1):",".")
         message += error_string
+        for e in errors:
+            message += "\n\n============================================================\n"
+            message += "Recieved the following error during automatic compilation:\n\n"
+            message += "\n".join(e)
         raise(CompileError(message))
     # Now run the test_kinds program
     get_size = os.path.join(working_dir,GET_SIZE_EXECUTABLE)
@@ -1013,9 +1030,9 @@ def resolve_arg_dimension(arg, all_args={}):
                 if (k + "(") in arg[ARG_DIM][i]:
                     arg_dim[i] = KNOWN_FORTRAN_FUNCS[k](arg[ARG_DIM][i])
                     changed = True
-            if changed:
-                print("WARNING: Processed a dimension of '%s' to be '%s'."
-                      %(arg[ARG_NAME], arg_dim[i]))
+            # if changed:
+            #     print("WARNING: Processed a dimension of '%s' to be '%s'."
+            #           %(arg[ARG_NAME], arg_dim[i]))
     return arg_dim
 
 # Given an argument, produce the list of dimension names that need to
@@ -1237,8 +1254,7 @@ def arg_to_py_declaration(arg, all_args={}):
         if len(arg[ARG_DIM]) > 0:
             # Create an optional check that defines this variable
             string += DEFAULT_NUMPY_ARRAY.format(
-                name=arg[ARG_NAME], dims=",".join(
-                    [CYTHON_MISSING_OPT_ARRAY_SIZE]*len(arg[ARG_DIM])),
+                name=arg[ARG_NAME], dims=",".join(arg[ARG_DIM]),
                 type=FORT_PY_SIZE_MAP[arg[ARG_TYPE]][arg[ARG_SIZE]])
         else:
             string += CYTHON_DEFAULT_VALUE.format(name=arg[ARG_NAME])
@@ -1251,11 +1267,12 @@ def arg_to_py_declaration(arg, all_args={}):
         string += CYTHON_TYPED_INIT.format(
             type=arg_c_type, name=local_name, val=arg[ARG_NAME])
         string += CYTHON_LINE_SEP
+    # Check to make sure multi-dimensional arrays are f_contiguous
+    if len(arg[ARG_DIM]) > 1:
+        string += CYTHON_ARRAY_CHECK.format(local_name)
     # If this argument has dimensions that need to have c-values, then
     # define those c values as well
     dim_args = arg_to_needed_dim(arg)
-    if len(dim_args) > 0:
-        string += CYTHON_ARRAY_CHECK.format(local_name)
     for dname in dim_args:
         i = dname.split("_")[-1]
         string += CYTHON_DIM_DEF.format(
@@ -1612,7 +1629,7 @@ def prepare_working_directory(source_file, source_dir, project_name,
     # Generate the names of files that will be created by this
     # program, so that we can copy them to an "old" directory if necessary.
     fort_wrapper_file = project_name+FORT_WRAPPER_EXT
-    cython_file = project_name+CYTHON_EXT
+    cython_file = project_name+CYTHON_SUFFIX+CYTHON_EXT
 
     if verbose:
         print()
@@ -1822,17 +1839,12 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                         continue
             except:
                 # Some failure occurred while reading that file, skip it
-                # TODO: If the failure occurred when attempting to
-                #       compile a module that is necessary, then the
-                #       error message provided will say 'there is no
-                #       <name>.mod', when really it should warn the
-                #       user that the automatic compilation of the
-                #       module itself failed.
                 continue
             # No failures or obvious red-flags, this file might be useful
             should_compile.append(f)
         # Handle dependencies by doing rounds of compilation, presuming
         # only files with fewest dependencies will compile first
+        errors = []
         successes = [None]
         # Continue rounds until (everything compiled) or (no success)
         while (len(should_compile) > 0) and (len(successes) > 0):
@@ -1842,6 +1854,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                 if verbose: print("FMODPY: Compiling '%s'..."%(f))
                 code, stdout, stderr = run([fort_compiler,fort_compile_arg]+fort_compiler_options+[f])
                 if code == 0: successes.append(f)
+                else: errors.append(stderr)
             # Remove the files that were successfully compiled from
             # the list of "should_compile"
             for f in successes:
@@ -1857,9 +1870,9 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
     # arguments to determine the appropriate C types to use     
     # =====================================================
     for func in funcs_and_args:
-        evaluate_sizes(modules, funcs_and_args[func], working_dir)
+        evaluate_sizes(modules, funcs_and_args[func], working_dir, errors)
     for func in interfaces:
-        evaluate_sizes(modules, interfaces[func], working_dir)
+        evaluate_sizes(modules, interfaces[func], working_dir, errors)
 
     if verbose:
         print("FMODPY: Generating the c-compatible fortran wrapper...")
@@ -1878,12 +1891,11 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
 
     #      Generate Python <-> C     
     # ===============================
-    # TODO: Fix documentation of module
     # TODO: Make "generate_c_python_wrapper" automatically produce
     #       documenation for the expected usage of wrapped functions.
     c_python_wrapper = generate_c_python_wrapper(
         modules, project_name, funcs_and_args, interfaces, documentation)
-    cython_file = os.path.join(working_dir, project_name+CYTHON_EXT)
+    cython_file = os.path.join(working_dir, project_name+CYTHON_SUFFIX+CYTHON_EXT)
     if not os.path.exists(cython_file):
         with open(cython_file, "w") as f:
             print(c_python_wrapper, file=f)
@@ -1926,7 +1938,7 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
                   (os.path.isfile(os.path.join(working_dir,f))
                    and (f[-2:] == ".o"))]
     if verbose: print("FMODPY: Linking %s..."%(link_files))
-    cython_source = [mod_name+CYTHON_EXT]
+    cython_source = [mod_name+CYTHON_SUFFIX+CYTHON_EXT]
 
     if c_compiler != None:
         # Set the compiler
