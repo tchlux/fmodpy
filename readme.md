@@ -56,6 +56,7 @@
 | 0.0.6<br>October 2017 | Testing sdist distribution instead of wheel. |
 | 0.0.6<br>November 2017 | Most recent version. See git for details. |
 | 0.0.7<br>November 2017 | Most recent version. See git for details. |
+| 0.1.0<br>January 2018 | Added 'fimport' function for ease-of-use. Fixed <br> storage initialization bug that was causing <br> seg-fault in python. Fixed missing <br> fortran-contiguity check for known-size input <br> arrays. |
 
 
 ## UPCOMING (checked means in development):
