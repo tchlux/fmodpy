@@ -1253,7 +1253,14 @@ def arg_to_py_declaration(arg, all_args={}):
         # If this is an optional array, make default initializer
         if len(arg[ARG_DIM]) > 0:
             # Create an optional check that defines this variable
-            needed_dims = arg_to_needed_dim(arg, all_args)
+            # 
+            # If the optional argument has assumed shape, we must
+            # assume that the array is not needed at all when it is
+            # not provided, so it can have a shape of 1.
+            if ':' in arg[ARG_DIM]:
+                needed_dims = "1" * len(needed_dims)
+            else:
+                needed_dims = arg_to_needed_dim(arg, all_args)
             string += DEFAULT_NUMPY_ARRAY.format(
                 name=arg[ARG_NAME], dims=",".join(needed_dims),
                 type=FORT_PY_SIZE_MAP[arg[ARG_TYPE]][arg[ARG_SIZE]])
