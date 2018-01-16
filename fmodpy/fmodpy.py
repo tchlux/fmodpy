@@ -1253,8 +1253,9 @@ def arg_to_py_declaration(arg, all_args={}):
         # If this is an optional array, make default initializer
         if len(arg[ARG_DIM]) > 0:
             # Create an optional check that defines this variable
+            needed_dims = arg_to_needed_dim(arg, all_args)
             string += DEFAULT_NUMPY_ARRAY.format(
-                name=arg[ARG_NAME], dims=",".join(arg[ARG_DIM]),
+                name=arg[ARG_NAME], dims=",".join(needed_dims),
                 type=FORT_PY_SIZE_MAP[arg[ARG_TYPE]][arg[ARG_SIZE]])
         else:
             string += CYTHON_DEFAULT_VALUE.format(name=arg[ARG_NAME])
@@ -1620,7 +1621,8 @@ def generate_c_python_wrapper(modules, project_name, funcs_and_args,
 # Given the path to the file that we are creating an extension for,
 # create and prepare a working directory for the project compilation
 def prepare_working_directory(source_file, source_dir, project_name,
-                              working_direcotry="", verbose=False):
+                              output_direcotry, working_direcotry="", 
+                              verbose=False):
     if len(working_direcotry) == 0:
         working_dir = os.path.join(source_dir, FMODPY_DIR_PREFIX+project_name)
     else:
@@ -1634,12 +1636,13 @@ def prepare_working_directory(source_file, source_dir, project_name,
     if verbose:
         print()
         print("="*60)
-        print("Input file directory:",source_dir)
-        print("Input file name:     ",source_file)
-        print("Base module name:    ",project_name)
-        print("Using working dir:   ",working_dir)
-        print("  fortran wrapper:   ",fort_wrapper_file)
-        print("  cython file:       ",cython_file)
+        print("Input file directory: ",source_dir)
+        print("Input file name:      ",source_file)
+        print("Base module name:     ",project_name)
+        print("Using working dir:    ",working_dir)
+        print("  fortran wrapper:    ",fort_wrapper_file)
+        print("  cython file:        ",cython_file)
+        print("Output file directory:",output_direcotry)
         print("="*60)
         print()
 
@@ -2079,17 +2082,18 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
 
     source_file = os.path.basename(input_fortran_file)
     source_dir = os.path.dirname(os.path.abspath(input_fortran_file))
+
     if len(mod_name) == 0:
         mod_name = BEFORE_DOT(source_file)
-        if not LEGAL_MODULE_NAME(mod_name):
-            raise(NameError(("'%s' is not an allowed module name,\n"+
-                             " must match the regexp `^[a-zA-z_]+"+
-                             "[a-zA-Z0-9_]*`. Set the name with:\n"+
-                             " fmodpy.wrap(<file>, mod_name=<legal name>)"+
-                             " OR\n $ fmodpy <file> mod_name=<legal_name>")%(mod_name)))
-
         working_dir_name = FMODPY_DIR_PREFIX+mod_name
         working_dir = os.path.join(source_dir, working_dir_name)
+
+    if not LEGAL_MODULE_NAME(mod_name):
+        raise(NameError(("'%s' is not an allowed module name,\n"+
+                         " must match the regexp `^[a-zA-z_]+"+
+                         "[a-zA-Z0-9_]*`. Set the name with:\n"+
+                         " fmodpy.wrap(<file>, mod_name=<legal name>)"+
+                         " OR\n $ fmodpy <file> mod_name=<legal_name>")%(mod_name)))
 
     # Get the last modification time of the module (if it exists already)
     # Make sure that the output directory is in the sys path so that
@@ -2118,7 +2122,8 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
 
     # Prepare (create) the working directory, copy in necessary files
     working_dir = prepare_working_directory(
-        source_file, source_dir, mod_name, working_directory, verbose)
+        source_file, source_dir, mod_name, output_directory,
+        working_directory, verbose)
 
     # Generate the wrappers for going from python <-> fortran
     fortran_to_python(input_fortran_file, working_dir, mod_name,
