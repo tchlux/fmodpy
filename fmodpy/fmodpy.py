@@ -1258,7 +1258,7 @@ def arg_to_py_declaration(arg, all_args={}):
             # assume that the array is not needed at all when it is
             # not provided, so it can have a shape of 1.
             if ':' in arg[ARG_DIM]:
-                needed_dims = "1" * len(needed_dims)
+                needed_dims = "1" * len(arg[ARG_DIM])
             else:
                 needed_dims = arg_to_needed_dim(arg, all_args)
             string += DEFAULT_NUMPY_ARRAY.format(
