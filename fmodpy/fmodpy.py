@@ -1077,7 +1077,6 @@ def arg_is_optional(arg, all_args={}):
                 if (d in ["*", ":"]) or (len(d) == 0):
                     is_optional = False
                     break
-
     return is_optional
 
 # ===============================================
