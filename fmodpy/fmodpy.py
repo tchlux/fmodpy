@@ -1,7 +1,11 @@
 '''
 PYTHON USAGE:
+ <local_mod_name> = fmodpy.fimport("<fortran source file", <kwargs>)
+
+   OR
+
  import fmodpy
- fmodpy.wrap("<fortran source file>")
+ fmodpy.wrap("<fortran source file>", <kwargs>)
  import <fortran_as_module>
 
 
