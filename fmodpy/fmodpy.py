@@ -49,12 +49,13 @@ autocompile_extra_files = True
 # ========================
 
 # Custom errors that can be raised during the fmodpy process
-class NotSupportedError(Exception): pass
-class CompileError(Exception):      pass
-class FortranError(Exception):      pass
-class LinkError(Exception):         pass
-class SizeError(Exception):         pass
-class NameError(Exception):         pass
+class BadKeywordArgument(Exception): pass
+class NotSupportedError(Exception):  pass
+class CompileError(Exception):       pass
+class FortranError(Exception):       pass
+class LinkError(Exception):          pass
+class SizeError(Exception):          pass
+class NameError(Exception):          pass
 
 # Custom classes for handling lookup errors gracefully
 class SizeMap(dict):
@@ -175,6 +176,7 @@ ABSTRACT_DECLARATIONS = ["PROCEDURE", "EXTERNAL"]
 ACCEPTABLE_DECLARATIONS = sorted(FORT_C_SIZE_MAP.keys()) + ABSTRACT_DECLARATIONS
 INTERFACE_START = "INTERFACE"
 INTERFACE_END = ["END","INTERFACE"]
+ASSUMED_DIMS = ["*", ":"]
 # 
 # Given the above globals, fmodpy supports the following grammar behaviors:
 # 
@@ -276,6 +278,17 @@ FORT_WRAPPER_INTERFACE = """
     {2}
      END SUBROUTINE {0}%s
 """%(FORT_INTERFACE_SUFFIX, FORT_INTERFACE_SUFFIX)
+# 0 -- Name of subroutine
+# 1 -- List of argument names
+# 2 -- Argument declarations
+# 3 -- "USE" line
+FORT_WRAPPER_SUB_INTERFACE = """
+     ! Fortran interface for passing assumed shapes to non-moduled functions.
+     SUBROUTINE {0}( {1} )
+    {3}
+    {2}
+     END SUBROUTINE {0}
+"""
 # 0 -- source subroutine name
 # 1 -- subroutine arguments in their "c" form
 # 2 -- argument declarations
@@ -692,7 +705,9 @@ def type_kind_dimension_intent_extra(line, arg_list):
     return arg_list
 
 # Read through a line-by-line fotran file and find the subroutines,
-# functions, arguments, and the types of the arguments
+# functions, arguments, and the types of the arguments. If functions
+# are not inside of a module, then they are simultaneously defined as
+# interfaces (for assumed shapes to transfer correctly)
 def extract_funcs_and_args(fort_file, requested=[], verbose=False):
     if verbose: print()
     modules = [] # list of module(s), by name, declared in this file,
@@ -708,7 +723,7 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
     interfaces = {}
     in_interface = 0
     interface_lines = []
-
+    code_in_module = False
 
     # Main loop searching through fortran file
     for line in fort_file:
@@ -724,7 +739,6 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
                 # arguments, then this is likely documentation
                 docs[in_func[-1]] = docs.get(in_func[-1],[]) + [line]
             continue
-            
         #      Preparing the input line     
         # ==================================
         prefix = []
@@ -743,7 +757,8 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
             ((len(split_line) >= 1) and (split_line[0] == INTERFACE_END[1]))):
             in_interface -= 1
             if (in_interface <= 0):
-                i_mods, i_funcs, i_ifaces, i_docs = extract_funcs_and_args(interface_lines)
+                i_in_mod, i_mods, i_funcs, i_ifaces, i_docs = (
+                    extract_funcs_and_args(interface_lines))
                 interface_lines = []
                 # Update the list of modules and interfaces
                 modules += [m for m in i_mods if m not in modules]
@@ -779,6 +794,9 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
             # Process heirarchy syntax in the code, identify modules,
             # subroutines, and functions being declared
             if (len(split_line) > 0) and (split_line[0] in ["MODULE", "USE"]):
+                # If we found a module declaration (only one per file)
+                # then all of the remaining code must be in that module
+                if (split_line[0] == "MODULE"): code_in_module = True
                 # Add any modules being used to the list (in case they're
                 # used in declarations of some of the paramaters)
                 mod_name = split_line[1]
@@ -868,10 +886,9 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
                         if verbose:
                             print("  "*len(in_func) + " declared '%s'"%(
                                 arg[ARG_NAME]))
-
     # Return the complete list of modules, functions and arguments for
     # each function
-    return modules, funcs, interfaces, docs
+    return code_in_module, modules, funcs, interfaces, docs
 
 # Read a fortran file and make it more consistently spaced, also
 # reduce all line continuations to single lines for parsing.
@@ -965,7 +982,7 @@ def evaluate_sizes(modules, args, working_dir, errors):
 
 # Convert an argument dictionary to a fortran string, expects a
 # certain structure of argument dictionary (see top of file)
-def arg_to_string(arg, all_args={}):
+def arg_to_string(arg, all_args={}, fill_needed_dims=True):
     # Produce a warning for undefined arguments
     if not arg[ARG_DEFINED]:
         arg_list = ["!!","WARNING","!!",arg[ARG_NAME],"UNDEFINED."]
@@ -975,11 +992,11 @@ def arg_to_string(arg, all_args={}):
     # Get the list of dimensions (resolving unknown sizes)
     dim_list = arg[ARG_DIM][:]
     # Only add dimension statement if necessary
-    if len(dim_list) > 0:
+    if ((len(dim_list) > 0) and fill_needed_dims):
         # Exctract the names of the extra arguments that will be passed
         needed_dims = arg_to_needed_dim(arg, all_args)
         for i in range(len(dim_list)):
-            if dim_list[i] in ["*", ":"]:
+            if dim_list[i] in ASSUMED_DIMS:
                 dim_list[i] = needed_dims.pop(0)
     # Ignore the kind of characters (because it isn't handled)
     is_character = (arg[ARG_TYPE] in ["CHARACTER"])
@@ -1017,7 +1034,7 @@ def resolve_arg_dimension(arg, all_args={}):
     arg_dim = [""] * len(arg[ARG_DIM])
     for i in range(len(arg[ARG_DIM])):
         # Skip dimensions that have known behavior
-        if arg[ARG_DIM][i] in ["*", ":"]:
+        if arg[ARG_DIM][i] in ASSUMED_DIMS:
             arg_dim[i] = arg[ARG_DIM][i] 
             continue
         # First, check to see if any of the dimensions are known variables
@@ -1049,7 +1066,7 @@ def arg_to_needed_dim(arg, all_args={}):
     needed_dim = []
     for i,d in enumerate(arg[ARG_DIM]):
         # If this is an assumed shape / size array, add extra size arguments
-        if d in ["*", ":"]:
+        if d in ASSUMED_DIMS:
             d = CYTHON_DIM_NAME.format(
                 name=arg[ARG_NAME][len(C_PREFIX) if is_c_char else 0:],
                 dim=i - is_c_char)
@@ -1078,7 +1095,7 @@ def arg_is_optional(arg, all_args={}):
         is_optional = True
         if len(arg[ARG_DIM]) > 0:
             for d in arg[ARG_DIM]:
-                if (d in ["*", ":"]) or (len(d) == 0):
+                if (d in ASSUMED_DIMS) or (len(d) == 0):
                     is_optional = False
                     break
     return is_optional
@@ -1107,7 +1124,7 @@ def args_to_fort_copy_args(all_args):
 def arg_to_fort_copy_args(arg, all_args={}):
     copy_inds = [a[ARG_NAME] for a in args_to_fort_copy_args([arg])]
     dims = arg_to_needed_dim(arg, all_args)
-    dim_names = [ d if d not in ["*", ":"] else dims.pop(0) 
+    dim_names = [ d if d not in ASSUMED_DIMS else dims.pop(0) 
                   for d in arg[ARG_DIM] ]
     # Generate the set of iterators for copying
     iterators = []
@@ -1193,8 +1210,8 @@ def arg_to_fort_copy_out(arg, all_args={}):
 
 # Recursive function for producing branching if statements necessary
 # to make the appropriate fortran calls based on provided optionals
-def generate_call_code(provided, not_provided, optional,
-                       sub_name, arguments, returned):
+def generate_fort_call_code(provided, not_provided, optional,
+                            sub_name, arguments, returned):
     if len(optional) == 0:
         # Fill out the call code appropriately for this case,
         # place in the standard arguments.
@@ -1218,12 +1235,12 @@ def generate_call_code(provided, not_provided, optional,
         # any of the optionals
         code = FORT_INDENT*(len(provided)+len(not_provided))
         code += "IF (%s) THEN"%(optional[0]) + FORT_LINE_SEPARATOR
-        code += generate_call_code(provided+[optional[0]],not_provided,
-                          optional[1:], sub_name, arguments, returned)
+        code += generate_fort_call_code(provided+[optional[0]],not_provided,
+                                        optional[1:], sub_name, arguments, returned)
         code += FORT_INDENT*(len(provided)+len(not_provided))
         code += "ELSE" + FORT_LINE_SEPARATOR
-        code += generate_call_code(provided,not_provided+[optional[0]],
-                          optional[1:], sub_name, arguments, returned)
+        code += generate_fort_call_code(provided,not_provided+[optional[0]],
+                                        optional[1:], sub_name, arguments, returned)
         code += FORT_INDENT*(len(provided)+len(not_provided))
         code += "ENDIF" + FORT_LINE_SEPARATOR
         return code
@@ -1260,12 +1277,14 @@ def arg_to_py_declaration(arg, all_args={}):
             # If the optional argument has assumed shape, we must
             # assume that the array is not needed at all when it is
             # not provided, so it can have a shape of 1.
-            if ':' in arg[ARG_DIM]:
-                needed_dims = "1" * len(arg[ARG_DIM])
+            if any(a in arg[ARG_DIM] for a in ASSUMED_DIMS):
+                auto_dim = "1" * len(arg[ARG_DIM])
             else:
-                needed_dims = arg_to_needed_dim(arg, all_args)
+                # WARNING: This might be wrong, for some reason I was
+                # using 'arg_to_needed_dim' instead of the dimension.
+                auto_dim = arg[ARG_DIM]
             string += DEFAULT_NUMPY_ARRAY.format(
-                name=arg[ARG_NAME], dims=",".join(needed_dims),
+                name=arg[ARG_NAME], dims=",".join(auto_dim),
                 type=FORT_PY_SIZE_MAP[arg[ARG_TYPE]][arg[ARG_SIZE]])
         else:
             string += CYTHON_DEFAULT_VALUE.format(name=arg[ARG_NAME])
@@ -1476,14 +1495,16 @@ def interface_to_c_func(name, arguments):
 # ====================================================
 
 # Generate the fortran wrapper code (in fortran) that can be called by c
-def generate_fort_c_wrapper(modules, project_name, funcs_and_args, interfaces):
+def generate_fort_c_wrapper(in_module, modules, project_name, 
+                            funcs_and_args, interfaces):
     fort_c_wrapper = ""
     # Generate the sting of "USE <MOD>"
     module_names = FORT_MOD_LINE_BREAK.join([FORT_USE_MOD_LINE%m
                                              for m in modules[::-1]])
-    # Add interfaces if necessary
+    # Add abstract interfaces if necessary (interfaces to functions
+    # that will be passed as arguments)
     interface_code = ""
-    if len(interfaces) > 0:
+    if (len(interfaces) > 0):
         interface_code += FORT_LINE_SEPARATOR + "\n  ABSTRACT INTERFACE"
         for i_name in interfaces:
             args = ", ".join([a[ARG_NAME] for a in interfaces[i_name]])
@@ -1492,9 +1513,22 @@ def generate_fort_c_wrapper(modules, project_name, funcs_and_args, interfaces):
             interface_code += FORT_WRAPPER_INTERFACE.format(i_name, args, decs)
         interface_code += "  END INTERFACE" + FORT_LINE_SEPARATOR * 2
 
+    # If the code is in a flat file, interfaces need to be
+    # declared for the source fortran code that's being called
+    if (not in_module):
+        # Start a new standard interface block
+        interface_code += FORT_LINE_SEPARATOR + "\n  INTERFACE"
+        for f_name in funcs_and_args:
+            args = ", ".join([a[ARG_NAME] for a in funcs_and_args[f_name]])
+            decs = (FORT_LINE_SEPARATOR).join(
+                [FORT_INDENT + arg_to_string(a, fill_needed_dims=False) 
+                 for a in funcs_and_args[f_name]])
+            interface_code += FORT_WRAPPER_SUB_INTERFACE.format(
+                f_name, args, decs, "   "+module_names)
+        interface_code += "  END INTERFACE" + FORT_LINE_SEPARATOR * 2
+
     fort_c_wrapper += FORT_WRAPPER_HEADER.format(
         project_name.upper(), module_names, interface_code).strip()
-
 
     for sub_name in funcs_and_args:
         # Get the arguments
@@ -1520,13 +1554,14 @@ def generate_fort_c_wrapper(modules, project_name, funcs_and_args, interfaces):
         # Convert these into single strings
         in_arg_names = ", ".join(in_arg_names).upper()
         arg_defs = FORT_LINE_SEPARATOR.join(arg_defs).upper()
+        # Formalize the character copying code
         copy_in_code = FORT_LINE_SEPARATOR.join(copy_in_code).upper()
         copy_out_code = FORT_LINE_SEPARATOR.join(copy_out_code).upper()
 
         # Separate arguments out into those that are optional and mandatory
         optionals = [arg_to_is_present(a)[0] for a in arguments if a[ARG_OPTIONAL]]
-        call_code = generate_call_code([],[],optionals,sub_name,
-                                       arguments,returned).upper()
+        call_code = generate_fort_call_code([],[],optionals,sub_name,
+                                            arguments,returned).upper()
         call_code = call_code[:-len(FORT_LINE_SEPARATOR)]
 
         # Compile all the above snippets of code into one subroutine
@@ -1692,10 +1727,13 @@ def prepare_working_directory(source_file, source_dir, project_name,
         for f in os.listdir(source_dir):
             source = os.path.join(source_dir,f)
             extension = AFTER_DOT(f)
-            # maybe_relavent = ("f" in extension) or (extension in {"mod", "o"})
+            # WARNING: If the user wants files to be in the module
+            # that do not have the standard extensions then this will
+            # accidentally exclude them.
+            maybe_relevant = ("f" in extension) or (extension in {"mod", "o"})
             is_directory = os.path.isdir(source)
             is_py_module = (f[-3] == ".so")
-            if not (is_directory or is_py_module):
+            if maybe_relevant and (not (is_directory or is_py_module)):
                 destination = os.path.join(working_dir,f)
                 if verbose:
                     print("FMODPY: Copying '%s' to '%s'"%(source, destination))
@@ -1724,7 +1762,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
     # Capture a boolean to know if it's old fortran or modern fortran
     is_old_fortran = AFTER_DOT(os.path.basename(fortran_file_path)) == "f"
     # Identify functions and arguments     
-    modules, funcs_and_args, interfaces, documentation = (
+    in_module, modules, funcs_and_args, interfaces, documentation = (
         extract_funcs_and_args(fort_file, requested_funcs) )
     if len(funcs_and_args) == 0:
         raise(FortranError("Did not find any fortran subroutines or functions to wrap."))
@@ -1763,7 +1801,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                     for i_arg in interfaces[func]:
                         message = ""
                         for d in i_arg[ARG_DIM]:
-                            if d in ["*", ":"]:
+                            if d in ASSUMED_DIMS:
                                 raise(NotSupportedError((
                                     "External procedure '%s' cannot take assumed"+
                                     " shape / size array '%s' as an argument.\n "+
@@ -1775,7 +1813,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                                 "'%s' in interface '%s'."%(i_arg[ARG_NAME], func)))
                     # Track which interfaces are used (and should be wrapped)
                     if arg[ARG_NAME] not in used_interfaces:
-                        used_interfaces
+                        used_interfaces.append(arg[ARG_NAME])
                 else:
                     raise(FortranError(
                         ("External procedure argument '%s' in '%s' does not "+
@@ -1793,6 +1831,12 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
 
     # Reduce the set of interfaces to those which are usable from python
     interfaces = {iface:interfaces[iface] for iface in used_interfaces}
+
+    # If all discovered functions were not in a module, they also need
+    # to be defined as interfaces for assumed shapes to transfer correctly.
+    if (not in_module):
+        if any(f in interfaces for f in funcs_and_args):
+            raise(FortranError("Interface with same name as non-moduled function not allowed."))
 
     #      Print out the set of functions     
     # ========================================
@@ -1892,7 +1936,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
 
     #      Generate C <-> Fortran wrapper     
     # ========================================
-    fort_c_wrapper = generate_fort_c_wrapper(modules, project_name,
+    fort_c_wrapper = generate_fort_c_wrapper(in_module, modules, project_name,
                                              funcs_and_args, interfaces)
     fort_wrapper_file = os.path.join(working_dir, project_name+FORT_WRAPPER_EXT)
     if not os.path.exists(fort_wrapper_file):
@@ -1966,11 +2010,14 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
     # Set the linker, with appropriate options
     os.environ["LDSHARED"] = " ".join([c_linker]+linker_options)
         
+    print("module_compile_args: ",module_compile_args)
+    print("module_link_args: ",module_link_args)
+    print("link_files: ",link_files)
     # Generate the extension module
     ext_modules = [ Extension(
         mod_name, cython_source,
         extra_compile_args=module_compile_args,
-        extra_link_args=link_files + module_link_args,
+        extra_link_args=module_link_args+link_files,
         include_dirs = [numpy.get_include()])]
 
     if verbose:
@@ -2083,9 +2130,17 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
          output_directory="", verbose=False, **kwargs):
     # Add **kwargs that captures any global settings temporarily
     # for this execution of the function.
+    unknown = set(kwargs.keys())
     for arg_name in kwargs:
         if (arg_name in globals()):
             globals()[arg_name] = kwargs[arg_name]
+            unknown.remove(arg_name)
+    # Check for invalid keyword arguments
+    if len(unknown) > 0:
+        error = ", ".join(sorted(unknown))
+        raise(BadKeywordArgument("Invalid keyword argument%s: %s\n\nSee 'help' documentation."%(
+            ("s" if len(unknown) > 1 else ""), error)))
+    
     # Set the default output directory
     if len(output_directory) == 0:
         output_directory = os.getcwd()
