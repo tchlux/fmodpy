@@ -172,7 +172,7 @@ IMMEDIATELY_EXCLUDE = ["PROGRAM"]
 ACCEPTABLE_PREFIXES = ["RECURSIVE", "PURE", "END", "ABSTRACT"]
 ACCEPTABLE_LINE_STARTS = ["MODULE", "USE", "SUBROUTINE", "FUNCTION",
                           "INTERFACE"] + [PUBLIC_STATEMENT, PRIVATE_STATEMENT]
-ABSTRACT_DECLARATIONS = ["PROCEDURE", "EXTERNAL"]
+ABSTRACT_DECLARATIONS = ["PROCEDURE", "EXTERNAL","OPTIONAL"]
 ACCEPTABLE_DECLARATIONS = sorted(FORT_C_SIZE_MAP.keys()) + ABSTRACT_DECLARATIONS
 INTERFACE_START = "INTERFACE"
 INTERFACE_END = ["END","INTERFACE"]
@@ -288,6 +288,18 @@ FORT_WRAPPER_SUB_INTERFACE = """
     {3}
     {2}
      END SUBROUTINE {0}
+"""
+# 0 -- Name of subroutine
+# 1 -- List of argument names
+# 2 -- Argument declarations
+# 3 -- "USE" line
+# 4 -- "RETURN(<name>)" line
+FORT_WRAPPER_FUNC_INTERFACE = """
+     ! Fortran interface for passing assumed shapes to non-moduled functions.
+     FUNCTION {0}( {1} ) {4}
+    {3}
+    {2}
+     END FUNCTION {0}
 """
 # 0 -- source subroutine name
 # 1 -- subroutine arguments in their "c" form
@@ -766,7 +778,11 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
                 for iface in i_ifaces:
                     if iface not in interfaces: 
                         interfaces[iface] = i_ifaces[iface]
-                interfaces.update(i_funcs)
+                # Initialize storage for this interface if necessary
+                if in_func[-1] not in interfaces: 
+                    interfaces[in_func[-1]] = {}
+                # Update the stored interfaces for this function
+                interfaces[in_func[-1]].update(i_funcs)
         elif (len(split_line) > 0) and (split_line[0] == INTERFACE_START):
             in_interface += 1
         elif (in_interface > 0): interface_lines.append(line)
@@ -1498,7 +1514,7 @@ def interface_to_c_func(name, arguments):
 def generate_fort_c_wrapper(in_module, modules, project_name, 
                             funcs_and_args, interfaces):
     fort_c_wrapper = ""
-    # Generate the sting of "USE <MOD>"
+    # Generate the string of "USE <MOD>"
     module_names = FORT_MOD_LINE_BREAK.join([FORT_USE_MOD_LINE%m
                                              for m in modules[::-1]])
     # Add abstract interfaces if necessary (interfaces to functions
@@ -1519,12 +1535,39 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
         # Start a new standard interface block
         interface_code += FORT_LINE_SEPARATOR + "\n  INTERFACE"
         for f_name in funcs_and_args:
-            args = ", ".join([a[ARG_NAME] for a in funcs_and_args[f_name]])
-            decs = (FORT_LINE_SEPARATOR).join(
-                [FORT_INDENT + arg_to_string(a, fill_needed_dims=False) 
-                 for a in funcs_and_args[f_name]])
-            interface_code += FORT_WRAPPER_SUB_INTERFACE.format(
-                f_name, args, decs, "   "+module_names)
+            args = [a[ARG_NAME] for a in funcs_and_args[f_name]]
+            decs = [FORT_INDENT + arg_to_string(a, fill_needed_dims=False) 
+                    for a in funcs_and_args[f_name]]
+            # If one of the arguments is returned, this this is a function
+            returned_args = [arg for arg in funcs_and_args[f_name]
+                             if arg[ARG_RETURNED]]
+            if (len(returned_args) > 0):
+                if any(arg[ARG_NAME] == f_name+FORT_FUNC_OUTPUT_SUFFIX
+                       for arg in funcs_and_args[f_name]):
+                    # If the function name is the returned argument
+                    return_string = ""
+                    # Remove that argument from the args list
+                    args.remove(f_name+FORT_FUNC_OUTPUT_SUFFIX)
+                    # Fix the declaration of the argument
+                    for i,a in enumerate(decs):
+                        if (f_name+FORT_FUNC_OUTPUT_SUFFIX) in a:
+                            decs[i] = a.replace(f_name+FORT_FUNC_OUTPUT_SUFFIX,f_name)
+                            break
+                else:
+                    return_string = "RETURN(%s)"%(returned_args[0][ARG_NAME])
+                    # Remove that argument from the args list
+                    args.remove(returned_args[0][ARG_NAME])
+                # Add an interface function block
+                args = ", ".join(args)
+                decs = FORT_LINE_SEPARATOR.join(decs)
+                interface_code += FORT_WRAPPER_FUNC_INTERFACE.format(
+                    f_name, args, decs, "   "+module_names, return_string)
+            else:
+                # Add an interface subroutine block
+                args = ", ".join(args)
+                decs = FORT_LINE_SEPARATOR.join(decs)
+                interface_code += FORT_WRAPPER_SUB_INTERFACE.format(
+                    f_name, args, decs, "   "+module_names)
         interface_code += "  END INTERFACE" + FORT_LINE_SEPARATOR * 2
 
     fort_c_wrapper += FORT_WRAPPER_HEADER.format(
@@ -1792,25 +1835,39 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
             if (is_old_fortran and (len(arg[ARG_DIM]) > 0)):
                 arg[ARG_DIM] = ["*"]
             # Try to resolve "external" declarations
-            if arg[ARG_TYPE] in ["EXTERNAL"]:
-                if (arg[ARG_NAME] in interfaces):
+            if arg[ARG_TYPE] in ["EXTERNAL","OPTIONAL"]:
+                # Handle the optional declarations (assume they're externals)
+                if arg[ARG_TYPE] in ["OPTIONAL"]:
+                    arg[ARG_TYPE] = "EXTERNAL"
+                    arg[ARG_OPTIONAL] = True
+                    # Attach the appropriate interface
+                    for i_face in interfaces[func]:
+                        if (i_face == arg[ARG_NAME]): break
+                    else:
+                        raise(FortranError((
+                            "Expected interface definition for optional"+
+                            " argument '%s'. (only interfaces are supported"+
+                            " as optional type))")%(arg[ARG_NAME])))
+                # Map the external interfaces
+                if (arg[ARG_NAME] in interfaces[func]):
                     arg[ARG_TYPE] = "PROCEDURE"
                     arg[ARG_KIND] = arg[ARG_NAME] + FORT_INTERFACE_SUFFIX
-                    arg[ARG_INTERFACE] = interfaces[arg[ARG_NAME]]
+                    arg[ARG_INTERFACE] = interfaces[func][arg[ARG_NAME]]
                     # Check to make sure the interface is legal
-                    for i_arg in interfaces[func]:
-                        message = ""
-                        for d in i_arg[ARG_DIM]:
-                            if d in ASSUMED_DIMS:
-                                raise(NotSupportedError((
-                                    "External procedure '%s' cannot take assumed"+
-                                    " shape / size array '%s' as an argument.\n "+
-                                    "Consider passing size as extra argument.")%(
-                                        func,i_arg[ARG_NAME])))
-                        if (not i_arg[ARG_DEFINED]) and (func not in to_remove):
-                            raise(FortranError(
-                                "Could not locate argument definition for "+
-                                "'%s' in interface '%s'."%(i_arg[ARG_NAME], func)))
+                    for i_face in interfaces[func]:
+                        for i_arg in interfaces[func][i_face]:
+                            message = ""
+                            for d in i_arg[ARG_DIM]:
+                                if d in ASSUMED_DIMS:
+                                    raise(NotSupportedError((
+                                        "External procedure '%s' cannot take assumed"+
+                                        " shape / size array '%s' as an argument.\n "+
+                                        "Consider passing size as extra argument.")%(
+                                            i_face,i_arg[ARG_NAME])))
+                            if (not i_arg[ARG_DEFINED]) and (func not in to_remove):
+                                raise(FortranError(
+                                    "Could not locate argument definition for "+
+                                    "'%s' in interface '%s'."%(i_arg[ARG_NAME], func)))
                     # Track which interfaces are used (and should be wrapped)
                     if arg[ARG_NAME] not in used_interfaces:
                         used_interfaces.append(arg[ARG_NAME])
@@ -2009,10 +2066,6 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
             linker_options.remove(bad_opt)
     # Set the linker, with appropriate options
     os.environ["LDSHARED"] = " ".join([c_linker]+linker_options)
-        
-    print("module_compile_args: ",module_compile_args)
-    print("module_link_args: ",module_link_args)
-    print("link_files: ",link_files)
     # Generate the extension module
     ext_modules = [ Extension(
         mod_name, cython_source,

@@ -57,6 +57,7 @@
 | 0.0.6<br>November 2017 | Most recent version. See git for details. |
 | 0.0.7<br>November 2017 | Most recent version. See git for details. |
 | 0.1.0<br>January 2018 | Added 'fimport' function for ease-of-use. Fixed <br> storage initialization bug that was causing <br> seg-fault in python. Fixed missing <br> fortran-contiguity check for known-size input <br> arrays. |
+| 0.2.0<br>February 2018 | New stable version. Fixed errors with functions in <br> flat files not defining interfaces properly. Added <br> fimport usage permanently. |
 
 
 ## UPCOMING (checked means in development):
