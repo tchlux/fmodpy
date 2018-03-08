@@ -278,40 +278,44 @@ FORT_WRAPPER_INTERFACE = """
     {2}
      END SUBROUTINE {0}%s
 """%(FORT_INTERFACE_SUFFIX, FORT_INTERFACE_SUFFIX)
-# 0 -- Name of subroutine
-# 1 -- List of argument names
-# 2 -- Argument declarations
-# 3 -- "USE" line
+# 0 -- Prefix for subroutine   
+# 1 -- Name of subroutine      
+# 2 -- List of argument names  
+# 3 -- Argument declarations   
+# 4 -- "USE" line              
 FORT_WRAPPER_SUB_INTERFACE = """
      ! Fortran interface for passing assumed shapes to non-moduled functions.
-     SUBROUTINE {0}( {1} )
+    {0} SUBROUTINE {1}( {2} )
+    {4}
     {3}
-    {2}
-     END SUBROUTINE {0}
+     END SUBROUTINE {1}
 """
-# 0 -- Name of subroutine
-# 1 -- List of argument names
-# 2 -- Argument declarations
-# 3 -- "USE" line
-# 4 -- "RETURN(<name>)" line
+# 0 -- Prefix for name        
+# 1 -- Name of subroutine     
+# 2 -- List of argument names 
+# 3 -- Argument declarations  
+# 4 -- "USE" line             
+# 5 -- "RETURN(<name>)" line  
 FORT_WRAPPER_FUNC_INTERFACE = """
      ! Fortran interface for passing assumed shapes to non-moduled functions.
-     FUNCTION {0}( {1} ) {4}
+    {0} FUNCTION {1}( {2} ) {5}
+    {4}
     {3}
-    {2}
-     END FUNCTION {0}
+     END FUNCTION {1}
 """
+# 0 -- source subroutine prefix
 # 0 -- source subroutine name
 # 1 -- subroutine arguments in their "c" form
 # 2 -- argument declarations
 # 3 -- code to run before the call (copy code)
 # 4 -- fortran call that resolves necessary values
 # 5 -- code to run after the call (copy code)
+# 6 -- prefix
 FORT_WRAPPER_SUB = """
   !     Fortran wrapper for {0}, callable from C     
   !========================================================
 
-  SUBROUTINE c_{0}( {1} ) BIND(c)
+  {6} SUBROUTINE c_{0}( {1} ) BIND(c)
     ! This subroutine's only purpose is to call the source fortran
     !  code while also being accessible from C.
     {2}
@@ -827,6 +831,7 @@ def extract_funcs_and_args(fort_file, requested=[], verbose=False):
                     # We have found a subroutine / function declaration
                     name_end_index = split_line.index("(") if ("(" in split_line) else len(split_line)
                     # Get the name of the subroutine (including prefixes)
+                    # WARNING: PREFIXES CAUSE PROBLEMS LATER, SHOULD REMOVE?
                     sub_name = " ".join(prefix + split_line[1:name_end_index])
                     # Initialize storage for this subroutine if it is accessible
                     in_func.append(sub_name)
@@ -1228,6 +1233,15 @@ def arg_to_fort_copy_out(arg, all_args={}):
 # to make the appropriate fortran calls based on provided optionals
 def generate_fort_call_code(provided, not_provided, optional,
                             sub_name, arguments, returned):
+    # Break apart the function name into the name and prefix
+    full_name = sub_name.split(" ")
+    if len(full_name) > 1:
+        prefix = " ".join(full_name[:len(full_name)-1])
+        full_name = full_name[-1]
+    else:
+        full_name = full_name[0]
+    sub_name = full_name
+    # Handle differently depending on if there are optionals
     if len(optional) == 0:
         # Fill out the call code appropriately for this case,
         # place in the standard arguments.
@@ -1535,6 +1549,15 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
         # Start a new standard interface block
         interface_code += FORT_LINE_SEPARATOR + "\n  INTERFACE"
         for f_name in funcs_and_args:
+            # Break apart the function name into the name and prefix
+            full_name = f_name.split(" ")
+            if len(full_name) > 1:
+                prefix = " ".join(full_name[:len(full_name)-1])
+                full_name = full_name[-1]
+            else:
+                prefix = ""
+                full_name = full_name[0]
+
             args = [a[ARG_NAME] for a in funcs_and_args[f_name]]
             decs = [FORT_INDENT + arg_to_string(a, fill_needed_dims=False) 
                     for a in funcs_and_args[f_name]]
@@ -1560,14 +1583,16 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
                 # Add an interface function block
                 args = ", ".join(args)
                 decs = FORT_LINE_SEPARATOR.join(decs)
+                print("Using function name:", f_name)
+                exit()
                 interface_code += FORT_WRAPPER_FUNC_INTERFACE.format(
-                    f_name, args, decs, "   "+module_names, return_string)
+                    prefix, full_name, args, decs, "   "+module_names, return_string)
             else:
                 # Add an interface subroutine block
                 args = ", ".join(args)
                 decs = FORT_LINE_SEPARATOR.join(decs)
                 interface_code += FORT_WRAPPER_SUB_INTERFACE.format(
-                    f_name, args, decs, "   "+module_names)
+                    prefix, full_name, args, decs, "   "+module_names)
         interface_code += "  END INTERFACE" + FORT_LINE_SEPARATOR * 2
 
     fort_c_wrapper += FORT_WRAPPER_HEADER.format(
@@ -1608,9 +1633,20 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
         call_code = call_code[:-len(FORT_LINE_SEPARATOR)]
 
         # Compile all the above snippets of code into one subroutine
-        fort_code = FORT_WRAPPER_SUB.format(sub_name, in_arg_names,
+
+        # Break apart the function name into the name and prefix
+        full_name = sub_name.split(" ")
+        if len(full_name) > 1:
+            prefix = " ".join(full_name[:len(full_name)-1])
+            full_name = full_name[-1]
+        else:
+            prefix = ""
+            full_name = full_name[0]
+
+        fort_code = FORT_WRAPPER_SUB.format(full_name, in_arg_names,
                                             arg_defs, copy_in_code,
-                                            call_code, copy_out_code).split("\n")
+                                            call_code, copy_out_code,
+                                            prefix).split("\n")
         fort_code.append("")
 
         # Make sure that line wraps occur where necessary
@@ -1654,9 +1690,17 @@ def generate_c_python_wrapper(modules, project_name, funcs_and_args,
         c_python_wrapper += interface_to_c_func(i_face, interfaces[i_face])
 
     for func_name in funcs_and_args:
+        # Break apart the function name into the name and prefix
+        full_name = func_name.split(" ")
+        if len(full_name) > 1:
+            prefix = " ".join(full_name[:len(full_name)-1])
+            full_name = full_name[-1]
+        else:
+            full_name = full_name[0]
+        # Get the arguments
         arguments = funcs_and_args[func_name]
         # Lower case everything on the python and c side of things
-        func_name = func_name.lower()
+        full_name = full_name.lower()
         for arg in arguments:
             arg[ARG_NAME] = arg[ARG_NAME].lower()
             # This next line gets the correct set of dimensions
@@ -1695,7 +1739,7 @@ def generate_c_python_wrapper(modules, project_name, funcs_and_args,
 
         py_output = CYTHON_LINE_SEP + "return " + py_output
         
-        code = CYTHON_FUNC.format(func_name, c_func_args, py_func_args,
+        code = CYTHON_FUNC.format(full_name, c_func_args, py_func_args,
                                   py_prep_code, py_c_call, py_output, 
                                   CYTHON_LINE_SEP.join(documentation.get(func_name.upper(), [])))
         c_python_wrapper += code + "\n\n"
