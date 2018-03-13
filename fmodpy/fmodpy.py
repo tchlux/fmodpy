@@ -1967,7 +1967,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
         # the working directory in case any are needed for linking.
         should_compile = []
         # Generate the list of files that we sould try to autocompile
-        for f in os.listdir():
+        for f in os.listdir(working_dir):
             f = f.strip()
             # Skip the preprocessed file, the size program, and directories
             if ( (PREPROCESSED_FORTRAN_FILE in f) or
@@ -2155,7 +2155,8 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
         # In case the module was already imported, reload it so that
         # the one left in memory is the most recent (so the user can
         # correctly import it later without any trouble)
-        module = importlib.reload(module)
+        if sys.version_info >= (3,): module = importlib.reload(module)
+        else:                        module = reload(module)
         module_path = os.path.abspath(module.__file__)
     except ImportError:
         raise(LinkError("\nUnable to successfully import module.\n Perhaps the "+

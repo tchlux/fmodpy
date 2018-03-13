@@ -67,6 +67,8 @@
 
 | 0.2.3<br>March 2018 | Patched some Python2.x compatability issues. Opened <br> new issue, 'signature' copying must be done <br> differently for Python2.x |
 
+| 0.2.4<br>March 2018 | Removed a reference to importlib.reload that was <br> incompatible with Python2.x. Ran some minor tests, <br> all seems to be working. |
+
 
 
 ## UPCOMING (checked means in development):
