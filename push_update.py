@@ -91,7 +91,7 @@ if __name__ == "__main__":
         time = version +"<br>"+ month +" "+ year
         # Update the version history file
         with open(os.path.join(DEFAULT_DIRECTORY,"version_history.txt"), "a") as f:
-            print("| %s | %s |\n"%(time, formatted_comment), file=f)
+            print("| %s | %s |"%(time, formatted_comment), file=f)
         # Generate the readme for this project
         with open("readme.md", "w") as f:
             name, email, git_username = read("author.txt")
