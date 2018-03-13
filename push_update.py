@@ -27,6 +27,12 @@ def run(command, **popen_kwargs):
         print("\n".join(stdout))
 
 
+# Import the "read" function from the package "setup.py" file.
+import os, sys
+sys.path = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]+sys.path
+from setup import read
+sys.path = sys.path[1:]
+
 DRY_RUN = False
 CLEAN_BEFORE = True
 UPDATE_README = not DRY_RUN
@@ -34,8 +40,8 @@ GIT_UPDATE = not DRY_RUN
 GIT_RELEASE = not DRY_RUN
 AUTO_MANIFEST = True
 MANIFEST_EXCLUSIONS = [".git", ".gitignore"]
-PYPI_BUILD = True
-PYPI_RELEASE = not DRY_RUN
+PYPI_BUILD = ("t" in read("on_pypi.txt")[0].lower())
+PYPI_RELEASE = PYPI_BUILD and (not DRY_RUN)
 # CLEAN_AFTER = not DRY_RUN
 CLEAN_AFTER = True
 if __name__ == "__main__":
@@ -62,6 +68,7 @@ if __name__ == "__main__":
             raise(NotEnoughArguments("Provide update notes as command line argument."))
 
     if UPDATE_README:
+        from setup import DEFAULT_DIRECTORY
         #      Update the readme with the notes for this update     
         # ==========================================================
         max_comment_length = 52
@@ -74,30 +81,31 @@ if __name__ == "__main__":
                 start = curr+1
             curr += 1
         formatted_comment = " ".join(formatted_comment)
-        # Insert the comment into the table in the readme
-        contents = []
-        inserted = False
-        found_top_of_version_block = False
-        with open("readme.md") as f:
-            for line in f:
-                if not inserted:
-                    search = line.strip()
-                    if ("Version and Date" in search) and ("Description" in search):
-                        found_top_of_version_block = True
-                    if ((len(search) == 0) and found_top_of_version_block):
-                        month = datetime.datetime.now().strftime("%B")
-                        year = datetime.datetime.now().strftime("%Y")
-                        time = version +"<br>"+ month +" "+ year
-                        contents.append(
-                            "| %s | %s |\n"%(time, formatted_comment) )
-                        # Insert the new information
-                        inserted = True
-                        print(contents[-1])
-                # Add the line to the output
-                contents.append(line)
-        with open("readme.md", "w") as f:
-            f.write("".join(contents))
 
+        month = datetime.datetime.now().strftime("%B")
+        year = datetime.datetime.now().strftime("%Y")
+        time = version +"<br>"+ month +" "+ year
+        # Update the version history file
+        with open(os.path.join(DEFAULT_DIRECTORY,"version_history.txt"), "a") as f:
+            print("| %s | %s |\n"%(time, formatted_comment), file=f)
+        # Generate the readme for this project
+        with open("readme.md", "w") as f:
+            name, email, git_username = read("author.txt")
+            f.write("\n".join(read("readme_template.md")).format(
+                name            =package,
+                purpose         =read("description.txt")[0],
+                author_name     =name,
+                author_email    =email,
+                install         ="\n".join(read("install.txt")),
+                usage           ="\n".join(read("usage.txt")),
+                how_it_works    ="\n".join(read("how_it_works.txt")),
+                version_history ="\n".join(read("version_history.txt")),
+                bugs            ="\n".join(read("bugs.txt")),
+                usability       ="\n".join(read("usability.txt")),
+                improvements    ="\n".join(read("improvements.txt")),
+            ))
+
+    # Generate an all-inclusive manifest
     if AUTO_MANIFEST:
         with open("MANIFEST.in", "w") as f:
             for name in os.listdir(os.getcwd()):
@@ -118,7 +126,7 @@ if __name__ == "__main__":
         #      Upload to github with version tag     
         # ===========================================
         run(["git", "tag", "-a", version, "-m", notes])
-        run(["git", "push", "--tags"])
+        run(["git", "push", "--tags", package])
 
     if PYPI_BUILD:
         #      Setup the python package as a universal wheel     
@@ -141,3 +149,12 @@ if __name__ == "__main__":
         # =================================================
         run(["rm", "-rf", "dist", "build", package+".egg-info", "MANIFEST.in"])
 
+    version = read("version.txt")[0]
+
+    # Update the version file so the next will not conflict
+    if not DRY_RUN:
+        from setup import DEFAULT_DIRECTORY
+        next_version = list(map(int,version.split(".")))
+        next_version[-1] += 1
+        with open(os.path.join(DEFAULT_DIRECTORY,"version.txt"), "w") as f:
+            print(".".join(list(map(str,next_version))), file=f)

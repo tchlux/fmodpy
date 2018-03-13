@@ -1,0 +1,9 @@
+- [ ] Make sure fortran argument names do not conflict with reserved
+      words in python, if they do, then add a reserved-word prefix
+
+- [ ] Modules that may be needed are not compiled before the size
+      testing program is compiled and executed. This causes crash.
+
+- [ ] If multiple files containing same-named subroutines exist in the
+      source fortran file directory then the autocompile_extra_files
+      option will cause multiple-declaration linking errors.

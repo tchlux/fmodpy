@@ -1,0 +1,3 @@
+
+| 0.2.1<br>March 2018 | Patched some Python2.x compatability issues. Opened <br> new issue, 'signature' copying must be done <br> differently for Python2.x |
+

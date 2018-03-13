@@ -1,0 +1,15 @@
+  Reads the fortran file, abstracting out the modules, subroutines,
+  functions. Identifies the type-description of each argument for
+  subroutines and functions. Uses type-descriptors to generate a
+  minimal cython wrapper and fortran wrapper. Afterwards a module is
+  generated using python distutils' setup.py. When importing and
+  using the generated fortran module, the call sequence looks like:
+
+       Python code
+    -> Cython
+    -> Wrapped fortran (transferring characters, implicit shapes, etc.)
+    -> Original fortran
+
+  This uses the specifications from the fortran file to determine how
+  the interface for each subroutine / function should behave. (i.e.
+  `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input)

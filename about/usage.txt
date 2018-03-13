@@ -1,0 +1,16 @@
+### PYTHON:
+
+    import fmodpy
+    fmodpy.wrap("<fortran source file>")
+    import <fortran_as_module>
+
+### COMMAND LINE:
+
+  For details on the different options, run python interactively and 
+  look at help(fmodpy.wrap). The execution of the program looks like:
+
+    $ python fmodpy.py <fortran source file> [<fmodpy.wrap kwargs>] [<fmodpy.globals() kwargs>] [<functions to wrap>]
+
+  This outputs a <fortran mod name>.so python module that can be
+  imported as any other python module would be.
+

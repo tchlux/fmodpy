@@ -1805,8 +1805,6 @@ def prepare_working_directory(source_file, source_dir, project_name,
             print("FMODPY:  Moved existing working directory contents to\n  '%s'"%(
                 os.path.join(working_dir,old_proj_name) ))
 
-        
-
     # If the working directory is not the same as the file directory,
     # copy all the contents of the file directory into the working
     # directory (in case any of them are used by the fortran project)
@@ -2337,19 +2335,22 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
     return mod_name
 
 # Wrap a fortran file as a module and return the module (to be named
-# via equals assignment). All arguments are identical to those for def
-# "wrap".
+# via equals assignment). All arguments are identical to those for the
+# function named "wrap". For full documentation see "help(wrap)".
 def fimport(*args, **kwargs):
     mod_name = wrap(*args, **kwargs)
     return importlib.import_module(mod_name)
 
-# Set the documentation and signature for fimport to be the same as wrap
-_documentation = "\n".join([line.lstrip("#") for line in
-                            inspect.getcomments(fimport).split("\n")])
-_documentation += "\n".join(['']+[line.lstrip("#") for line in
-                            inspect.getcomments(wrap).split("\n")])
-fimport.__signature__ = inspect.signature(wrap)
-fimport.__doc__ = _documentation
+# For Python 2.x, do not attempt to transfer signature.
+# For Python 3.x, use "inspect.signature".
+if sys.version_info >= (3,):
+    # Set the documentation and signature for fimport to be the same as wrap
+    _documentation = "\n".join([line.lstrip("#") for line in
+                                inspect.getcomments(fimport).split("\n")])
+    _documentation += "\n".join(['']+[line.lstrip("#") for line in
+                                inspect.getcomments(wrap).split("\n")])
+    fimport.__signature__ = inspect.signature(wrap)
+    fimport.__doc__ = _documentation
 
 # These must be the last declared globals for them to include
 # everything, allows for automatically parsing command line arguments
@@ -2363,61 +2364,4 @@ USER_GLOBAL_CASTS = {
 USER_MODIFIABLE_GLOBALS = [n for n,v in globals().items() if
                            (n.lower() == n) and (n[:1] != "_") and
                            (type(v) in USER_GLOBAL_CASTS)]
-
-# Making this module accessible by being called directly from command line.
-if __name__ == "__main__":
-    import traceback
-
-    if len(sys.argv) < 2:
-        print(__doc__)
-        exit()
-    else:
-        file_path = os.path.abspath(sys.argv[1])
-
-    #      Pretty error handling when this file is executed directly     
-    # ===================================================================
-    def custom_excepthook(exc_type, value, tb):
-        l = ''.join(traceback.format_exception(exc_type, value, tb))
-        print(l)
-    sys.excepthook = custom_excepthook
-
-    # Create a directory to hold all of the intermediate wrapping file
-    extra_args = []
-    # Generate a list of modifiable "wrap" parameters
-    wrap_parameters = inspect.signature(wrap).parameters
-    wrap_parameters = [p for p in wrap_parameters if (not wrap_parameters[p].default)]
-    wrap_kwargs = {p:inspect.signature(wrap).parameters[p].default
-                   for p in wrap_parameters}
-
-    # Extract some of the few acceptable command line arguments
-    if len(sys.argv) > 2:
-        print("RECOGNIZED COMMAND LINE CUSTOMIZATIONS:")
-    for a in sys.argv[2:]:
-        for g_name in USER_MODIFIABLE_GLOBALS + wrap_parameters:
-            if ((g_name+"=") in a[:len(g_name+"=")]):
-                a = a[len(g_name+"="):]
-                if g_name in globals():
-                    print(g_name,"=",globals()[g_name], end=" -> ")
-                    param_type = type(globals()[g_name])
-                    type_cast = USER_GLOBAL_CASTS[param_type]
-                    globals()[g_name] = type_cast(a)
-                    print(globals()[g_name])
-                elif g_name in wrap_parameters:
-                    print(g_name,"=",wrap_kwargs[g_name], end=" -> ")
-                    param_type = type(inspect.signature(wrap).parameters[g_name].default)
-                    type_cast = USER_GLOBAL_CASTS[param_type]
-                    wrap_kwargs[g_name] = type_cast(a)
-                    print(wrap_kwargs[g_name])
-                break
-        else:
-            extra_args.append(a)
-
-    # Add extra arguments in as requested functions
-    if len(extra_args) > 0:
-        wrap_kwargs["requested_funcs"] = wrap_kwargs["requested_funcs"] + extra_args
-        print("requested_funcs = %s -> %s"%([], wrap_kwargs["requested_funcs"]))
-
-    # Call "wrap"
-    wrap(file_path, **wrap_kwargs)
-
 
