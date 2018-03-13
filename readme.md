@@ -65,6 +65,8 @@
 
 | 0.2.2<br>March 2018 | Patched some Python2.x compatability issues. Opened <br> new issue, 'signature' copying must be done <br> differently for Python2.x |
 
+| 0.2.3<br>March 2018 | Patched some Python2.x compatability issues. Opened <br> new issue, 'signature' copying must be done <br> differently for Python2.x |
+
 
 
 ## UPCOMING (checked means in development):
