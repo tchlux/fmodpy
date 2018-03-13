@@ -8,6 +8,10 @@ class NotEnoughArguments(Exception): pass
 #   command -- A list of strings or string (space separated) describing
 #              a standard command as would be given to subprocess.Popen
 def run(command, **popen_kwargs):
+    string = f"Executing '{command}'"
+    print("\n"+"="*len(string))
+    print(string)
+    print("="*len(string)+"\n")
     import sys, subprocess
     # For Python3.x ensure that the outputs are strings
     if sys.version_info >= (3,6):
@@ -91,18 +95,18 @@ if __name__ == "__main__":
         # Generate the readme for this project
         with open("readme.md", "w") as f:
             name, email, git_username = read("author.txt")
-            f.write("\n".join(read("readme_template.md")).format(
+            f.write(read("readme_template.md", processed=False).format(
                 name            =package,
                 purpose         =read("description.txt")[0],
                 author_name     =name,
                 author_email    =email,
-                install         ="\n".join(read("install.txt")),
-                usage           ="\n".join(read("usage.txt")),
-                how_it_works    ="\n".join(read("how_it_works.txt")),
-                version_history ="\n".join(read("version_history.txt")),
-                bugs            ="\n".join(read("bugs.txt")),
-                usability       ="\n".join(read("usability.txt")),
-                improvements    ="\n".join(read("improvements.txt")),
+                install         =read("install.txt", processed=False),
+                usage           =read("usage.txt", processed=False),
+                how_it_works    =read("how_it_works.txt", processed=False),
+                version_history =read("version_history.txt", processed=False),
+                bugs            =read("bugs.txt", processed=False),
+                usability       =read("usability.txt", processed=False),
+                improvements    =read("improvements.txt", processed=False),
             ))
 
     # Generate an all-inclusive manifest

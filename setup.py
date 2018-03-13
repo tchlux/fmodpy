@@ -11,13 +11,16 @@ import os
 # Go to the "about" directory in the CWD
 DEFAULT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)),"about")
 # Convenience function for reading information files
-def read(f_name, dir_name=DEFAULT_DIRECTORY):
+def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
     text = []
     with open(os.path.join(dir_name, f_name)) as f:
-        for line in f:
-            line = line.strip()
-            if (len(line) > 0) and (line[0] != "%"):
-                text.append(line)
+        if processed:
+            for line in f:
+                line = line.strip()
+                if (len(line) > 0) and (line[0] != "%"):
+                    text.append(line)
+        else:
+            text = f.read()
     return text
 
 if __name__ == "__main__":
