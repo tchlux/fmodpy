@@ -45,9 +45,11 @@
     -> Wrapped fortran (transferring characters, implicit shapes, etc.)
     -> Original fortran
 
+
   This uses the specifications from the fortran file to determine how
   the interface for each subroutine / function should behave. (i.e.
-  `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input)
+  `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input
+  when size can be inferred)
 
 
 ## VERSION HISTORY:
@@ -56,9 +58,6 @@
 |-----------------------|-----------------------|
 | 0.0.0<br>October 2017 | First release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. Supports Python2.7 and Python3.x. |
 | 0.0.6<br>October 2017 | Added 'output_directory' argument, auto-compilation <br> will now work if all dependencies are in the source <br> directory, made F77 '.f' files collapse multi-dim <br> arrays to single dimension. |
-| 0.0.6<br>October 2017 | Testing sdist distribution instead of wheel. |
-| 0.0.6<br>November 2017 | Most recent version. See git for details. |
-| 0.0.7<br>November 2017 | Most recent version. See git for details. |
 | 0.1.0<br>January 2018 | Added 'fimport' function for ease-of-use. Fixed <br> storage initialization bug that was causing <br> seg-fault in python. Fixed missing <br> fortran-contiguity check for known-size input <br> arrays. |
 | 0.2.0<br>February 2018 | New stable version. Fixed errors with functions in <br> flat files not defining interfaces properly. Added <br> fimport usage permanently. |
 | 0.2.1<br>March 2018 | Patched some Python2.x compatability issues. Opened <br> new issue, 'signature' copying must be done <br> differently for Python2.x |
