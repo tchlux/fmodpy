@@ -1,0 +1,7 @@
+include MANIFEST.in
+recursive-include fmodpy *
+include readme.md
+include setup.py
+include push_update.py
+include setup.cfg
+include LICENSE.txt
