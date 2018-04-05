@@ -8,8 +8,9 @@ except:
     raise(DependencyError("Missing python package 'setuptools'.\n  pip install --user setuptools"))
 
 import os
-# Go to the "about" directory in the CWD
-DEFAULT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)),"about")
+# Go to the "about" directory in the package directory
+PACKAGE_NAME = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)),PACKAGE_NAME,"about")
 # Convenience function for reading information files
 def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
     text = []
@@ -26,7 +27,7 @@ def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
 if __name__ == "__main__":
     #      Read in the package description files     
     # ===============================================
-    package = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+    package = PACKAGE_NAME
     version =read("version.txt")[0]
     description = read("description.txt")[0]
     requirements = read("requirements.txt")
