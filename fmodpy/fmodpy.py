@@ -2158,9 +2158,9 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
         if sys.version_info >= (3,): module = importlib.reload(module)
         else:                        module = reload(module)
         module_path = os.path.abspath(module.__file__)
-    except ImportError:
-        raise(LinkError("\nUnable to successfully import module.\n Perhaps the "+
-                        "relevant fortran modules were not available?"))
+    except ImportError as exc:
+        raise(LinkError("\n\n"+str(exc)+"\n\nUnable to successfully import module.\n Perhaps the "+
+                        "relevant compiled fortran files were not available? See message above."))
     finally:
         # Rever the system path no matter what
         sys.path = original_path
