@@ -56,6 +56,7 @@ class FortranError(Exception):       pass
 class LinkError(Exception):          pass
 class SizeError(Exception):          pass
 class NameError(Exception):          pass
+class NotReadyYet(Exception):        pass
 
 # Custom classes for handling lookup errors gracefully
 class SizeMap(dict):
@@ -269,14 +270,17 @@ MODULE {0}_WRAPPER
   {2}
 CONTAINS
 """
-# 0 -- Name of interface
-# 1 -- List of argument names
-# 2 -- Argument declarations
+# 0 -- Prefix to interface ('recursive' definition)
+# 1 -- Name of interface
+# 2 -- List of argument names
+# 3 -- Any 'use' statements
+# 4 -- Argument declarations
 FORT_WRAPPER_INTERFACE = """
      ! Fortran interface for declaring necessary "PROCEDURE" typed arguments
-     SUBROUTINE {0}%s( {1} ) BIND(C)
-    {2}
-     END SUBROUTINE {0}%s
+     {0}SUBROUTINE {1}%s( {2} ) BIND(C)
+    {3}
+    {4}
+     END SUBROUTINE {1}%s
 """%(FORT_INTERFACE_SUFFIX, FORT_INTERFACE_SUFFIX)
 # 0 -- Prefix for subroutine   
 # 1 -- Name of subroutine      
@@ -1510,6 +1514,11 @@ def interface_to_c_func(name, arguments):
     python_func_outputs = ", ".join(python_func_outputs).lower()
     python_copy_out = CYTHON_LINE_SEP.join(python_copy_out).lower()
 
+    # Remove the 'recursive' prefix from the subroutine.
+    if "RECURSIVE " in name:
+        return ""
+    # WARNING: I'm just using ^^ to get around a bug, need a rework!!
+    
     # 0 -- The name of the argument interface
     # 1 -- The list of arguments (c typed) to the interface
     # 2 -- The list of local python arguments comma separated
@@ -1537,10 +1546,15 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
     if (len(interfaces) > 0):
         interface_code += FORT_LINE_SEPARATOR + "\n  ABSTRACT INTERFACE"
         for i_name in interfaces:
+            if "RECURSIVE" in i_name:
+                prefix = "RECURSIVE "
+            else:
+                prefix = ""
             args = ", ".join([a[ARG_NAME] for a in interfaces[i_name]])
             decs = (FORT_LINE_SEPARATOR).join(
                 [FORT_INDENT + arg_to_string(a) for a in interfaces[i_name]])
-            interface_code += FORT_WRAPPER_INTERFACE.format(i_name, args, decs)
+            interface_code += FORT_WRAPPER_INTERFACE.format(
+                prefix, i_name[len(prefix):], args, module_names, decs)
         interface_code += "  END INTERFACE" + FORT_LINE_SEPARATOR * 2
 
     # If the code is in a flat file, interfaces need to be
@@ -1577,14 +1591,12 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
                             decs[i] = a.replace(f_name+FORT_FUNC_OUTPUT_SUFFIX,f_name)
                             break
                 else:
-                    return_string = "RETURN(%s)"%(returned_args[0][ARG_NAME])
+                    return_string = "RESULT(%s)"%(returned_args[0][ARG_NAME])
                     # Remove that argument from the args list
                     args.remove(returned_args[0][ARG_NAME])
                 # Add an interface function block
                 args = ", ".join(args)
                 decs = FORT_LINE_SEPARATOR.join(decs)
-                print("Using function name:", f_name)
-                exit()
                 interface_code += FORT_WRAPPER_FUNC_INTERFACE.format(
                     prefix, full_name, args, decs, "   "+module_names, return_string)
             else:
@@ -1860,10 +1872,21 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
     #      Clean up the set of functions     
     # =======================================
     used_interfaces = []
+
     # Define arguments using implicit types, un-define arguments that
     # are of unrecognized types.
     for func in funcs_and_args:
         for arg in funcs_and_args[func]:
+            # Give interfaces a definition if they were declared.
+            if (arg[ARG_NAME] in interfaces.get(func,{})):
+                arg[ARG_TYPE] = "EXTERNAL"
+                arg[ARG_DEFINED] = True
+                arg[ARG_INTERFACE] = interfaces[func][arg[ARG_NAME]]
+                # Get the type of the result if the interface is a function
+                for i_arg in arg[ARG_INTERFACE]:
+                    if i_arg[ARG_RETURNED]:
+                        arg[ARG_KIND] = i_arg[ARG_KIND]
+            # Check for definition
             if (not arg[ARG_DEFINED]):
                 arg[ARG_DEFINED] = True
                 arg[ARG_TYPE] = FORT_IMPLICIT_TYPE(arg[ARG_NAME])
@@ -1928,14 +1951,19 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                     "Could not locate argument definition for "+
                     "'%s' argument in '%s'."%(arg[ARG_NAME], func)))
 
-    # Reduce the set of interfaces to those which are usable from python
-    interfaces = {iface:interfaces[iface] for iface in used_interfaces}
+    # # Reduce the set of interfaces to those which are usable from python
+    # interfaces = {iface:interfaces[iface] for iface in used_interfaces}
 
-    # If all discovered functions were not in a module, they also need
-    # to be defined as interfaces for assumed shapes to transfer correctly.
-    if (not in_module):
-        if any(f in interfaces for f in funcs_and_args):
-            raise(FortranError("Interface with same name as non-moduled function not allowed."))
+    # WARNING: Reused interface names in different subroutines will conflict!!
+    interfaces = {iface:interfaces[func][iface] for iface in 
+                  interfaces.get(func,{}) for func in interfaces}
+
+
+    # # If all discovered functions were not in a module, they also need
+    # # to be defined as interfaces for assumed shapes to transfer correctly.
+    # if (not in_module):
+    #     if any(f in interfaces for f in funcs_and_args):
+    #         raise(FortranError("Interface with same name as non-moduled function not allowed."))
 
     #      Print out the set of functions     
     # ========================================
@@ -2029,6 +2057,13 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
         evaluate_sizes(modules, funcs_and_args[func], working_dir, errors)
     for func in interfaces:
         evaluate_sizes(modules, interfaces[func], working_dir, errors)
+
+    # Update the interface declarations (with sizes) for all functions
+    for func in funcs_and_args:
+        for iface in interfaces:
+            for arg in funcs_and_args[func]:
+                if iface == arg[ARG_NAME]:
+                    arg[ARG_INTERFACE] = interfaces[iface]
 
     if verbose:
         print("FMODPY: Generating the c-compatible fortran wrapper...")
