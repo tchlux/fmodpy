@@ -27,15 +27,15 @@ import re, os, sys, shutil, importlib, inspect
 #      User customizable variables     
 # =====================================
 
-fort_compiler = "gfortran"
-fort_compile_arg = "-c"
-fort_compiler_options = ["-fPIC", "-O3"]
+f_compiler = "gfortran"
+f_compile_arg = "-c"
+f_compiler_options = ["-fPIC", "-O3"]
 c_linker = "gcc"
-c_compiler = None #"gcc"
+c_compiler = None # "gcc"
 module_compile_args = ["-O3"]
 module_link_args =    ["-lgfortran"] # ["-lblas", "-llapack", "-lgfortran"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
-autocompile_extra_files = True
+autocompile_extra_files = False
 
 # TODO:  Automatically add the "-lblas" and "-llapack" options if a
 #        recognizable compile error appears? Not sure if this is possible
@@ -43,6 +43,8 @@ autocompile_extra_files = True
 #        options because they may not be aware that is necessary
 # TODO:  Check to make sure all functions requested are available in
 #        the most recent compilation. If not, recompile.
+# TODO:  Add function "make_func" that creates a fortran subroutine,
+#        that matches python inputs and outputs, with an empty body.
 
 # ========================
 #      fmodpy Globals     
@@ -422,7 +424,7 @@ CYTHON_OPT_BOOL = "cdef " + FORT_C_SIZE_MAP["LOGICAL"][DEFAULT_F_LOG_SIZE] \
                  + " {name} = True"
 CYTHON_OPTIONAL_CHECK = "if (type({0}) == type(None)):"
 CYTHON_OPT_MISSING = "{name} = False"
-DEFAULT_NUMPY_ARRAY = "{name} = numpy.ones(shape=({dims}),dtype={type},order='F')"
+DEFAULT_NUMPY_ARRAY = "{name} = numpy.zeros(shape=({dims}),dtype={type},order='F')"
 CYTHON_DEFAULT_VALUE = "{name} = 1"
 CYTHON_TYPED_INIT = "cdef {type} {name} = {val}"
 # Statements for managing array inputs
@@ -964,7 +966,7 @@ def evaluate_sizes(modules, args, working_dir, errors):
     # Compile the test program (in the working directory)
     original_dir = os.getcwd()
     os.chdir(working_dir)
-    compile_command = [fort_compiler,"-o",GET_SIZE_EXECUTABLE,file_name]
+    compile_command = [f_compiler,"-o",GET_SIZE_EXECUTABLE,file_name]
     return_code, stdout, stderr = run(compile_command)
     os.chdir(original_dir)
     # Check for status
@@ -1440,7 +1442,7 @@ def arg_to_interface_copy(arg, out=False):
     if len(arg[ARG_DIM]) > 0:
         if not out:
             dimension = ",".join(["%s[0]"%(d) for d in arg[ARG_DIM]])
-            line = LOCAL_PREFIX+"{name} = numpy.ones({dimension}, dtype={type})".format(
+            line = LOCAL_PREFIX+"{name} = numpy.zeros({dimension}, dtype={type})".format(
                 name=arg[ARG_NAME], dimension=dimension,
                 type=FORT_PY_SIZE_MAP[arg[ARG_TYPE]][arg[ARG_SIZE]])
             lines.append(line)
@@ -2036,7 +2038,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
             for f in should_compile:
                 # Try to compile all files that have "f" in the extension
                 if verbose: print("FMODPY: Compiling '%s'..."%(f))
-                code, stdout, stderr = run([fort_compiler,fort_compile_arg]+fort_compiler_options+[f])
+                code, stdout, stderr = run([f_compiler,f_compile_arg]+f_compiler_options+[f])
                 if code == 0: successes.append(f)
                 else: errors.append(stderr)
             # Remove the files that were successfully compiled from
@@ -2045,6 +2047,8 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                 should_compile.remove(f)
         # Revert to the original directory
         os.chdir(original_dir)
+    else:
+        errors = []
 
     if verbose:
         print("FMODPY: Evaluating byte-sizes of fortran arguments...")
@@ -2109,8 +2113,8 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
 
     if not os.path.exists(os.path.join(working_dir,BEFORE_DOT(file_name) + ".o")):
         if verbose: print("FMODPY: Compiling '%s'..."%(file_name))
-        comp_code, stdout, stderr = run([fort_compiler,fort_compile_arg]+
-                                        fort_compiler_options+[file_name])
+        comp_code, stdout, stderr = run([f_compiler,f_compile_arg]+
+                                        f_compiler_options+[file_name])
         if comp_code != 0:
             raise(CompileError("Unexpected error in '%s'.\n"%(file_name)+
                                "\n".join(stderr)))
@@ -2118,8 +2122,8 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
     # Compile the fortran wrapper 
     wrap_code = mod_name+FORT_WRAPPER_EXT
     if verbose: print("FMODPY: Compiling '%s'..."%(wrap_code))
-    wrap_code, stdout, stderr = run([fort_compiler,fort_compile_arg]+
-                                    fort_compiler_options+[wrap_code])
+    wrap_code, stdout, stderr = run([f_compiler,f_compile_arg]+
+                                    f_compiler_options+[wrap_code])
     if wrap_code != 0:
         print("\n".join(stderr))
         raise(CompileError("\nError in generated wrapper (fmodpy bug?)\n"))
@@ -2237,9 +2241,9 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
 # In order to take finer control over the python-module construction
 # process, modify the following globals stored in fmodpy:
 # 
-#    fort_compiler         -- str, should be accessible from a system call.
-#    fort_compile_arg      -- str, defaults to '-c'.
-#    fort_compiler_options -- list<str>, extra options for fortran compilation.
+#    f_compiler            -- str, should be accessible from a system call.
+#    f_compile_arg         -- str, defaults to '-c'.
+#    f_compiler_options    -- list<str>, extra options for fortran compilation.
 #    c_linker   -- str, Updates 'LDSHARED' envrionment variable to
 #                  indirectly control c-linker used by distutils.
 #    c_compiler -- str, Updates 'CC' environment variable to
