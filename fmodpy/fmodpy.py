@@ -386,26 +386,30 @@ def UBOUND_TO_NUMPY(contents):
 # Function to replace the expression "<before>SIZE(<arg>)<after>"
 # with "<before><arg>.size<after>"
 def SIZE_TO_NUMPY(contents):
-    start_index = contents.index("SIZE(") + len("SIZE(")
-    before_call = contents[:start_index-len("SIZE(")]
-    parens = 1
-    for index in range(start_index, len(contents)):
-        if contents[index] == ")":
-            parens -= 1
-        elif contents[index] == "(":
-            parens += 1
-        if parens <= 0: break
-    argument = contents[start_index:index]
-    after_call = contents[index+len(")"):]
-    if "," not in argument:
-        name = argument
-        func_replacement = "{name}.size".format(name=name).lower()
-    else:
-        name, dim = argument.split(",")[:2]
-        try:    dim = str(int(dim) - 1)
-        except: dim += "-1"
-        func_replacement = "{name}.shape[{dim}]".format(name=name, dim=dim).lower()
-    return before_call + func_replacement + after_call
+    contents = contents.lower()
+    while "size(" in contents:
+        start_index = contents.index("size(") + len("size(")
+        before_call = contents[:start_index-len("size(")]
+        parens = 1
+        for index in range(start_index, len(contents)):
+            if contents[index] == ")":
+                parens -= 1
+            elif contents[index] == "(":
+                parens += 1
+            if parens <= 0: break
+        argument = contents[start_index:index]
+        after_call = contents[index+len(")"):]
+        if "," not in argument:
+            name = argument
+            func_replacement = "{name}.size".format(name=name).lower()
+        else:
+            name, dim = argument.split(",")[:2]
+            try:    dim = str(int(dim) - 1)
+            except: dim += "-1"
+            func_replacement = "{name}.shape[{dim}]".format(name=name, dim=dim).lower()
+        # Replace float division with integer division in python.
+        contents = before_call + func_replacement + after_call
+    return contents
 
 
 KNOWN_FORTRAN_FUNCS = {
@@ -2028,6 +2032,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                 continue
             # No failures or obvious red-flags, this file might be useful
             should_compile.append(f)
+        if verbose: print("FMODPY: Shoudl compile '%s'..."%(should_compile))
         # Handle dependencies by doing rounds of compilation, presuming
         # only files with fewest dependencies will compile first
         errors = []
@@ -2261,7 +2266,7 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
 #                                        compiler is not the same as python's.
 # 
 def wrap(input_fortran_file, mod_name="", requested_funcs=[],
-         force_rebuild=False, working_directory="",
+         force_rebuild=False, working_directory="", omp=False,
          output_directory="", verbose=False, **kwargs):
     # Add **kwargs that captures any global settings temporarily
     # for this execution of the function.
@@ -2275,6 +2280,13 @@ def wrap(input_fortran_file, mod_name="", requested_funcs=[],
         error = ", ".join(sorted(unknown))
         raise(BadKeywordArgument("Invalid keyword argument%s: %s\n\nSee 'help' documentation."%(
             ("s" if len(unknown) > 1 else ""), error)))
+    # Add open mp arguments if desired.
+    if omp:
+        global f_compiler_options, module_link_args
+        if ("-fopenmp" not in f_compiler_options):
+            f_compiler_options += ['-fopenmp']
+        if ("-fopenmp" not in module_link_args):
+            module_link_args += ['-fopenmp']
     
     # Set the default output directory
     if len(output_directory) == 0:
