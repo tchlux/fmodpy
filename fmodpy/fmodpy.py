@@ -2156,7 +2156,7 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
     ext_modules = [ Extension(
         mod_name, cython_source,
         extra_compile_args=module_compile_args,
-        extra_link_args=module_link_args+link_files,
+        extra_link_args=link_files+module_link_args,
         include_dirs = [numpy.get_include()])]
 
     if verbose:
