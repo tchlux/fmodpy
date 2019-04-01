@@ -1613,6 +1613,35 @@ def generate_fort_c_wrapper(in_module, modules, project_name,
                     prefix, full_name, args, decs, "   "+module_names)
         interface_code += "  END INTERFACE" + FORT_LINE_SEPARATOR * 2
 
+    # Make sure the interface code has line breaks on long lines.
+    if len(interface_code) > 0:
+        # ------------------------------------------------------------
+        interface_code = interface_code.split("\n")
+        interface_code.append("")
+        # Make sure that line wraps occur where necessary
+        line = 0
+        indent_size = 0
+        while (line < len(interface_code)):
+            # If this is a newly continued line, update the indent size
+            if (len(interface_code[line-1]) > 0 ) and (interface_code[line-1][-1] != "&"):
+                indent_size = (5 + len(interface_code[line]) -
+                               len(interface_code[line].lstrip()))
+            line_str = interface_code[line].split("!")
+            line_str, comment = (line_str[0], line_str[1]
+                             if len(line_str) > 1 else "")
+            line += 1
+            if len(line_str) > 70:
+                line_str, rest = (line_str[:70] + "&",
+                                  " "*indent_size+"&"+line_str[70:])
+                # Update the truncated line
+                interface_code[line - 1] = line_str
+                # Add the new line (will be processed later)
+                interface_code.insert(line, rest)
+                continue
+            if len(comment) > 0: line_str += " !"+comment
+        interface_code = "\n".join(interface_code)
+        # ------------------------------------------------------------
+
     fort_c_wrapper += FORT_WRAPPER_HEADER.format(
         project_name.upper(), module_names, interface_code).strip()
 
