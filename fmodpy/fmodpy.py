@@ -78,6 +78,7 @@ class SizeDict(dict):
 # How to translate a fortran of a given type and size to a c type
 FORT_C_SIZE_MAP = SizeMap(
     INTEGER = SizeDict("INTEGER", {
+        "1":"char",
         "4":"int",
         "8":"long"
     }),
