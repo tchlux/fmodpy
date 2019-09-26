@@ -33,9 +33,10 @@ f_compiler_options = ["-fPIC", "-O3"]
 c_linker = "gcc"
 c_compiler = None # "gcc"
 module_compile_args = ["-O3"]
-module_link_args =    ["-lgfortran"] # ["-lblas", "-llapack", "-lgfortran"]
+module_link_args =    [] # ["-lgfortran", "-lblas", "-llapack"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
 autocompile_extra_files = False
+ld_shared_path = "/usr/local/Cellar/gcc/9.2.0/lib/gcc/9/" # locate libgfortran.a
 
 # TODO:  Automatically add the "-lblas" and "-llapack" options if a
 #        recognizable compile error appears? Not sure if this is possible
@@ -2062,7 +2063,7 @@ def fortran_to_python(fortran_file_path, working_dir, project_name,
                 continue
             # No failures or obvious red-flags, this file might be useful
             should_compile.append(f)
-        if verbose: print("FMODPY: Shoudl compile '%s'..."%(should_compile))
+        if verbose: print("FMODPY: Should compile '%s'..."%(should_compile))
         # Handle dependencies by doing rounds of compilation, presuming
         # only files with fewest dependencies will compile first
         errors = []
@@ -2182,12 +2183,13 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
             linker_options.remove(bad_opt)
     # Set the linker, with appropriate options
     os.environ["LDSHARED"] = " ".join([c_linker]+linker_options)
+    os.environ["LD_LIBRARY_PATH"] = ld_shared_path
     # Generate the extension module
     ext_modules = [ Extension(
         mod_name, cython_source,
         extra_compile_args=module_compile_args,
         extra_link_args=link_files+module_link_args,
-        include_dirs = [numpy.get_include()])]
+        include_dirs = [numpy.get_include()]) ]
 
     if verbose:
         print("FMODPY: Compiling extension module using setup...")
@@ -2205,7 +2207,15 @@ def build_mod(file_name, working_dir, mod_name, verbose=True):
     # used to build this module. Modify the commands appropriately.
     actual_argv = sys.argv
     sys.argv = ['', 'build_ext', '--inplace']
-    dist = setup( name = mod_name, ext_modules = cythonize(ext_modules) )
+    try:
+        dist = setup( name = mod_name, ext_modules = cythonize(ext_modules) )
+    except:
+        if not verbose:
+            # Reset stdout back to its normal state
+            sys.stdout = original_stdout
+            sys.stderr = original_stderr
+        # Raise an error message.
+        raise(LinkError(f"Failed to link '{mod_name}'.."))
     sys.argv = actual_argv
 
     if verbose:
