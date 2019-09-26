@@ -36,7 +36,7 @@ module_compile_args = ["-O3"]
 module_link_args =    [] # ["-lgfortran", "-lblas", "-llapack"]
 module_disallowed_linker_options = ["-Wshorten-64-to-32"]
 autocompile_extra_files = False
-ld_shared_path = "/usr/local/Cellar/gcc/9.2.0/lib/gcc/9/" # locate libgfortran.a
+ld_shared_path = "" # "/usr/local/Cellar/gcc/9.2.0/lib/gcc/9/" # locate libgfortran.a
 
 # TODO:  Automatically add the "-lblas" and "-llapack" options if a
 #        recognizable compile error appears? Not sure if this is possible
