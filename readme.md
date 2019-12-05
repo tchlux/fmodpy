@@ -1,34 +1,60 @@
-|             |                |
-|-------------|----------------|
-|**TITLE:**   | fmodpy         |
-|**PURPOSE:** | A lightweight, efficient, highly automated, fortran wrapper for python.      |
-|**AUTHOR:**  | Thomas C.H. Lux  |
-|**EMAIL:**   | tchlux@vt.edu |
+<p align="center">
+  <h1 align="center"><code>fmodpy</code></h1>
+</p>
+
+<p align="center">
+An easy-to-use Fortran wrapper for Python.
+</p>
+
+Modern Fortran is capable of being integrated with Python near
+seamlessly allowing for rapid transition between prototype and
+optimized production-ready code. This packages aims to make Fortran
+code as easy to import and use as native Python modules. This combines
+the performance of Fortran with the convenience and accessibility of
+Python, allowing for a productive and exciting development pipeline.
 
 
 ## INSTALLATION:
 
     $ pip install fmodpy
 
+  This code expects that you already have a Fortran compiler and a C
+  compiler installed. By default, many C compilers do not have access
+  to the Fortran header files (for Fortran intrinsics like memory
+  allocation and math operations) so if you experience linking errors,
+  then use something like `locate libgfortran.a` (for whatever your
+  Fortran compiler header file will be named) and set the C
+  `ld_shared_path` argument to that directory path.
+
+  Perhaps the easiest setup is to install `gfortran` and `gcc` with
+  your preferred package manager, then default behavior should work.
+
 
 ## USAGE:
 
 ### PYTHON:
 
-    import fmodpy
-    fmodpy.wrap("<fortran source file>")
-    import <fortran_as_module>
+```python
+import fmodpy
+
+# Compile and import the Fortran code. (This will automatically
+#  recompile the code if it has been saved recently.)
+module = fmodpy.fimport("<fortran source file>",
+                        f_compiler="gfortran",
+                        c_linker="gcc", c_link_args=["-lgfortran"])
+```
+
+  For more details, see the `help(fmodpy.fimport)` documentation.
 
 ### COMMAND LINE:
 
   For details on the different options, run python interactively and 
-  look at help(fmodpy.wrap). The execution of the program looks like:
+  look at `help(fmodpy.wrap)`. The execution from the command line looks like:
 
     $ python -m fmodpy <fortran source file> [<fmodpy.wrap kwargs>] [<fmodpy.globals() kwargs>] [<functions to wrap>]
 
   This outputs a <fortran mod name>.so python module that can be
   imported as any other python module would be.
-
 
 
 ## HOW IT WORKS:
@@ -47,54 +73,121 @@
 
 
   This uses the specifications from the fortran file to determine how
-  the interface for each subroutine / function should behave. (i.e.
+  the interface for each subroutine / function should behave. (I.e.,
   `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input
-  when size can be inferred)
+  when size can be inferred.)
 
 
 ## VERSION HISTORY:
 
-|Version and Date       | Description           |
-|-----------------------|-----------------------|
-| 0.0.0<br>October 2017 | First release, handles integers, reals, <br> characters, logicals, and procedures (as arguments). <br> Compiles on Ubuntu, Mac OS, and Windows using <br> gcc as the linker, gcc / clang / gcc respectively <br> as the compilers. Supports Python2.7 and Python3.x. |
-| 0.0.6<br>October 2017 | Added 'output_directory' argument, auto-compilation <br> will now work if all dependencies are in the source <br> directory, made F77 '.f' files collapse multi-dim <br> arrays to single dimension. |
-| 0.1.0<br>January 2018 | Added 'fimport' function for ease-of-use. Fixed <br> storage initialization bug that was causing <br> seg-fault in python. Fixed missing <br> fortran-contiguity check for known-size input <br> arrays. |
-| 0.2.0<br>February 2018 | New stable version. Fixed errors with functions in <br> flat files not defining interfaces properly. Added <br> fimport usage permanently. |
-| 0.2.1<br>March 2018 | Patched some Python2.x compatability issues. Opened <br> new issue, 'signature' copying must be done <br> differently for Python2.x |
-| 0.2.4<br>March 2018 | Removed a reference to importlib.reload that was <br> incompatible with Python2.x. Ran some minor tests, <br> all seems to be working. |
-| 0.2.5<br>April 2018 | Fixed an import issue involving a missing 'setup.py' <br> file. |
+  See [this file](fmodpy/about/version_history.txt).
 
 
-## UPCOMING (checked means in development):
+## UPCOMING:
 
-### BUGS
+  This module is undergoing a major code re-base. The interface should
+  remain (almost) identical, however some redundant or poorly named
+  arguments may be removed or renamed. The changes will allow for the
+  following features that are **not** currently supported:
 
-- [ ] Make sure fortran argument names do not conflict with reserved
-      words in python, if they do, then add a reserved-word prefix
+ - multiple Fortran modules in one file
+ - custom `TYPE` in Fortran (and arrays of that type)
+ - returned `ALLOCATABLE` arrays in Fortran
+ - automatically generated `Makefile` and `make.py` scripts for
+   distribution that do *not* require other users to have `fmodpy`
+ - project-specific `fmodpy` configuration files
+ - a default global `fmodpy` configuration file
 
-- [ ] If multiple files containing same-named subroutines exist in the
-      source fortran file directory then the autocompile_extra_files
-      option will cause multiple-declaration linking errors.
-
-
-### USABILITY
-
-- [ ] Restructure code-base to be broken up into the different parts
-      of the wrapping process and unclutter \_\_init__.py in the process.
-      (i.e. parse_fortran.py, generate_fortran_wrapper.py,
-       generate_cython_wrapper.py, construct_py_module.py)
-
-- [ ] Add example fortran programs that can be used as test cases and
-      demonstrations for new users.
+  Along with these improvements, the code is being modularized to
+  allow for easier sustained development. I've been working on this
+  throughout 2019, and hope to have the work completed sometime in
+  2020.
 
 
-### IMPROVEMENTS
+## EXAMPLE CODE
 
-- [ ] Add python interface for permanently changing default compilation options.
+Here is a simple python code that compares a `fmodpy`-wrapped Fortran
+code with standard NumPy. This example performs a matrix multiply
+operation using Fortran.
 
-- [ ] Make intermediate fortran subroutine that passes assumed
-      shapes back into C (for passing subroutines as arguments when 
-      the subroutines have assumed shape arrays).
+```python
+# This is a Python file named whatever you like. It demonstrates
+#   automatic `fmodpy` wrapping.
 
-- [ ] Add support for fortran data types (structs in C).
+import fmodpy
+import numpy as np
 
+code = fmodpy.fimport("code.f03",
+                      f_compiler="gfortran",
+                      c_linker="gcc",
+                      c_link_args=[] # "-lgfortran" might be needed.
+)
+
+a = np.array([
+    [1,2,3,4,5],
+    [1,2,3,4,5]
+], dtype=float, order='F')
+
+b = np.array([
+    [1,2],
+    [3,4],
+    [5,6],
+    [7,8],
+    [9,10]
+], dtype=float, order='F')
+
+print()
+print("a:")
+print(a)
+
+print()
+print("b:")
+print(b)
+
+print()
+print("Numpy result")
+print(np.matmul(a,b))
+
+print()
+print("Fortran result")
+print(code.matrix_multiply(a,b))
+
+
+print()
+help(code.matrix_multiply)
+```
+
+Here is the associated Fortran file `code.f03` (no specific reason for
+the name, any of `.f95`, `.f03`, and `.f08` extensions could be used).
+
+```fortran
+! This module provides various testbed routines for demonstrating
+! the simplicity of Fortran code usage with `fmodpy`.
+! 
+! Contains:
+! 
+!   MATRIX_MULTIPLY  --  A routine for multiplying two matrices of floats.
+! 
+
+SUBROUTINE MATRIX_MULTIPLY(A,B,OUT)
+  ! This subroutine multiplies the matrices A and B.
+  ! 
+  ! INPUT:
+  !   A(M,N)  --  A 2D matrix of 64 bit floats.
+  !   B(N,P)  --  A 2D matrix of 64 bit floats,
+  ! 
+  ! OUTPUT:
+  !   OUT(M,P)  --  The matrix that is the result of (AB).
+  ! 
+  USE ISO_FORTRAN_ENV, ONLY: REAL64 ! <- Get a float64 type.
+  IMPLICIT NONE  ! <- Make undefined variable usage raise errors.
+  REAL(KIND=REAL64), INTENT(IN),  DIMENSION(:,:) :: A, B
+  REAL(KIND=REAL64), INTENT(OUT), DIMENSION(SIZE(A,1),SIZE(B,2)) :: OUT
+
+  ! Compute the matrix multiplication of A and B.
+  OUT(:,:) = MATMUL(A,B)
+
+END SUBROUTINE MATRIX_MULTIPLY
+```
+
+Now run the python program and see the output!
