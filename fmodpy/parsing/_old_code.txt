@@ -1,0 +1,95 @@
+                    # TEMPORARY.
+                    _ = ', '.join([a.fort_call_name() for a in present])
+                    lines += [f"{indent}PRINT *, 'PRESENT: {_}'"]
+
+
+                    # TEMPORARY.
+                    _ = ', '.join([a.fort_call_name() for a in present])
+
+
+
+        module = line_str_list[1]
+        if (len(line_str_list) > 2):
+            if (tuple(line_str_list[2:5]) != (",","ONLY",":")):
+                from fmodpy.exceptions import FortranError
+                raise(FortranError("Expected long 'USE' statment to have structure 'USE <name>, ONLY: <comma separated names>'.\n  Recieved instead '{' '.join(line_str_list)}'."))
+            names = line_str_list[5:]
+            while "," in names: names.remove(",")
+
+
+
+    # The string that will construct a corresponding Parameter object
+    # as part of a Python signature.
+    def py_signature(self):
+        param = [f"'{self.name.lower()}'","inspect.Parameter.POSITIONAL_OR_KEYWORD"]
+        # Get annotation based on size.
+        if (self.size in self.np_types):
+            if (self.dimension is None): dim = ""
+            else: dim = str(self.dimension).lower().replace(' ','').replace("'",'')
+            annotation = f"{self.np_types[self.size]}{dim}"
+            param += [f"annotation='{annotation}'"]
+        # Add the default value (if it is applicable).
+        if self._is_optional(): param += ["default=None"]
+        # Return the Parameter string that assumes "inspect" is imported.
+        return [f"inspect.Parameter({', '.join(param)})"]
+
+
+# Given a simplified fortran file (list of strings, where each
+# element is a line from a file with only the necessary Fortran
+# constructs to define the interface with python), return a Fortran
+# object (a python-object abstraction of the Fortran file).
+def parse_fortran_file(fortran_file):
+    from fmodpy.parsing.file import Fortran
+    raise(NotImplementedError)
+    return 
+
+
+#   Argument()
+#     .name = "<name>"
+#     .type = "<type>"
+#     .size = "<size>"
+#     .kind = "<kind>"
+#     .intent = "<intent>"
+#     .message = "<messages to user>"
+#     .defined = True / False
+#     .allocatable = True / False
+#     .optional = True / False
+#     .dim = ["<dim 1>", ...]
+#     ._is_optional()
+#     ._is_present()
+#     ._to_copy_args()
+#     ._to_needed_dim()
+#     .to_py_input_doc_string()
+#     .to_py_output_doc_string()
+#     .to_py_input()
+#     .to_py_prepare()
+#     .to_py_call()
+#     .to_py_after()
+#     .to_py_return()
+#     .to_c_input()
+#     .to_c_prepare()
+#     .to_c_call()
+#     .to_c_after()
+#     .to_fort_input()
+#     .to_fort_declare()
+#     .to_fort_prepare()
+#     .to_fort_call()
+#     .to_fort_after()
+#
+#   Real(Argument)
+# 
+#   Integer(Argument)
+# 
+#   Logical(Argument)
+# 
+#   Character(Argument)
+#     .len = "<len>"
+# 
+#   Procedure(Argument)
+#     .interface = Interface()
+# 
+#   Type(Argument)
+#     .contains = [<Argument>, ...]
+#     
+
+

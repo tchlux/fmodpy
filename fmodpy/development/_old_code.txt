@@ -1,0 +1,145 @@
+        # Reset stdout back to its normal state
+        sys.stdout = original_stdout
+        sys.stderr = original_stderr
+
+
+        # Capture the output of setup so it doesn't bother the user
+        original_stdout = sys.stdout
+        original_stderr = sys.stderr
+        sys.stdout = open(os.devnull, "w")
+        sys.stderr = open(os.devnull, "w")
+
+
+
+# These must be the last declared globals for them to include
+# everything, allows for automatically parsing command line arguments
+# the same way as the user would set the variables in practice.
+USER_GLOBAL_CASTS = {
+    type(None) : lambda s: s,
+    str        : lambda s: s,
+    list       : lambda s: s[1:-1].split(","),
+    bool       : lambda s: bool(s.lower().strip("false").replace("0","")),
+}
+
+# The list of globals that users can modify at execution time.
+USER_MODIFIABLE_GLOBALS = [n for n,v in globals().items() if
+                           n.islower() and (n[:1] != "_") and
+                           (type(v) in USER_GLOBAL_CASTS)]
+
+
+
+
+
+
+    # Compile the source file if necessary.
+    if not os.path.exists(os.path.join(build_dir,before_dot(source_file) + ".o")):
+        if verbose: print("Compiling '%s'..."%(source_file))
+        comp_code, stdout, stderr = run([f_compiler] + f_compiler_args + [source_file])
+        if comp_code != 0:
+            raise(CompileError("Unexpected error when compiling '%s'.\n"%(source_file)+
+                               "\n".join(stderr)))
+
+
+    #      Prepare a working directory     
+    # =====================================
+    if not os.path.exists(working_dir):
+        # Otherwise, create the initial working directory
+        os.makedirs(working_dir)
+    elif len(working_direcotry) == 0:
+        # Otherwise the user didn't give a directory, but it exists
+        # for some reason (probably failure?) So save contents.
+        # 
+        # Identify a viable name for the old project contents
+        num = 1
+        while os.path.exists( os.path.join(
+                working_dir, OLD_PROJECT_NAME(project_name, num))): num += 1
+        old_proj_name = OLD_PROJECT_NAME(project_name, num)
+        # Create the directory for old project contents
+        old_proj_dir = os.path.join(working_dir,old_proj_name)
+        os.makedirs(os.path.join(working_dir,old_proj_name))
+        # Move the files that would've been created by this project
+        # before into an "OLD" directory
+        for f in os.listdir(working_dir):
+            f = os.path.join(working_dir, f)
+            if not os.path.isdir(f):
+                shutil.move(f,os.path.join(old_proj_dir,os.path.basename(f)))
+        if verbose:
+            print("Moved existing working directory contents to\n  '%s'"%(
+                os.path.join(working_dir,old_proj_name) ))
+
+
+
+# In order to take finer control over the python-module construction
+# process, modify the following globals stored in fmodpy:
+# 
+#    fort_compiler         -- str, should be accessible from a system call.
+#    fort_compile_arg      -- str, defaults to '-c'.
+#    fort_compiler_options -- list<str>, extra options for fortran compilation.
+#    c_linker   -- str, Updates 'LDSHARED' envrionment variable to
+#                  indirectly control c-linker used by distutils.
+#    c_compiler -- str, Updates 'CC' environment variable to
+#                  indirectly control c-compiler used by distutils.
+#    module_compile_args -- list<str> 'extra_compile_args' argument
+#                           passed into Extension constructor for distutils.
+#    module_link_args    -- list<str> 'extra_link_args' argument
+#                           passed into Extension constructor for
+#                           distutils. Needs to allow chosen
+#                           c-compiler to link to fortran. 
+#    module_disallowed_linker_options -- list<str> of arguments to the
+#                                        c-linker that may be causing
+#                                        linkage failure. This happens
+#                                        sometimes when the system default
+#                                        compiler is not the same as python's.
+#    verbose            -- True if you want updates and printouts
+#                          about the wrapping process.
+
+
+
+
+# For Python 2.x, do not attempt to transfer signature.
+# For Python 3.x, use "inspect.signature".
+if sys.version_info >= (3,):
+    # Set the documentation and signature for fimport to be the same as wrap
+    _documentation = "\n".join([line.lstrip("#") for line in
+                                inspect.getcomments(fimport).split("\n")])
+    _documentation += "\n".join(['']+[line.lstrip("#") for line in
+                                inspect.getcomments(wrap).split("\n")])
+    fimport.__signature__ = inspect.signature(wrap)
+    fimport.__doc__ = _documentation
+
+
+def cleanup():
+    # Copy out the module from the working_dir to the output directory
+    if (output_directory != working_dir):
+        # Create the output directory if necessary
+        os.makedirs(output_directory, exists_ok=True)
+        # Generate a destination file name
+        mod_destination = os.path.join(
+            output_directory,os.path.basename(mod_path))
+        # Remove the existing python module
+        if os.path.exists(mod_destination):
+            if verbose: print("FMODPY: Removing old fortran python module.")
+            os.remove(mod_destination)
+        # Copy the module into the output directory
+        shutil.copyfile(mod_path, mod_destination)
+        if verbose: print("FMODPY: Copied python module to '%s'."%(output_directory))
+
+    if len(working_directory) == 0:
+        # Remove the automatically created working directory
+        shutil.rmtree(working_dir)
+        if verbose: print("FMODPY: Removed working directory.\n")
+    else:
+        if verbose: print("FMODPY: Leaving working directory, cleaning up.")
+        # If the user is keeping the working directory, remove
+        # compiled files so they will not be accidentally re-used
+        # after modifications are made to the sources.
+        for f_name in os.listdir(working_directory):
+            is_created_file = (f_name in {GET_SIZE_PROG_FILE,
+                                          GET_SIZE_EXECUTABLE, 
+                                          PREPROCESSED_FORTRAN_FILE})
+            if is_created_file:
+                if verbose: print("FMODPY: Removing compiled file '%s'."%(f_name))
+                path = os.path.join(working_directory, f_name)
+                os.remove(path)
+
+

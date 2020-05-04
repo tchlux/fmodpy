@@ -1,0 +1,12 @@
+SUBROUTINE RESERVE(SIZE, OUTPUT)
+  USE ISO_FORTRAN_ENV, ONLY: REAL64, INT64
+  IMPLICIT NONE
+  INTEGER(KIND=INT64), INTENT(IN) :: SIZE
+  REAL(KIND=REAL64), INTENT(OUT), DIMENSION(:), ALLOCATABLE :: OUTPUT
+  PRINT '("Allocating memory..", I4, I10)', SIZE, SIZE * (2**17)
+  ! Allocate an array that takes up "SIZE" megabytes.
+  ALLOCATE(OUTPUT(SIZE * (2**17)))
+  PRINT '("  shape --", I10)', SHAPE(OUTPUT)
+  PRINT '("Done!")'
+  ! End of routine.
+END SUBROUTINE RESERVE
