@@ -8,8 +8,8 @@ class Code:
     type = None
     docs = ""
     lines = 0
-    # Does the end of this Code have to be named?
     allowed_unknown = False
+    # Does the end of this Code have to be named?
     needs_end = True
     named_end = True
     # Parent module.
@@ -19,6 +19,8 @@ class Code:
     # List of (func, str) pairs where the string is the local attribute
     # name and the function is a parser returning a list of objects.
     can_contain = []
+    # List of (func) parsing functions that handle ignorable contents.
+    will_ignore = []
 
     # Generate a string describing this code.
     def __str__(self):
@@ -48,7 +50,7 @@ class Code:
     # initialize this object.
     def parse(self, list_of_lines):
         from fmodpy.config import fmodpy_print as print
-        print(f"{self.type.title()}.parse")
+        print(f"{self.type.title()}.parse {self.name}")
         # Extract documentation first.
         while (len(list_of_lines) > 0) and (list_of_lines[0].strip()[:1] == "!"):
             self.docs += "\n" + list_of_lines.pop(0)
@@ -85,6 +87,10 @@ class Code:
                         list_of_lines.pop(0)
                         ended = True
                         break
+                # This is the end of something else (not me), ignore it.
+                else:
+                    list_of_lines.pop(0)
+                    continue
             # Parse the contained objects out of the file.
             for (parser, name) in self.can_contain:
                 pre_length = len(list_of_lines)
@@ -98,14 +104,23 @@ class Code:
                     comments = ""
                     break
             else:
-                if self.allowed_unknown:
-                    comments = ""
-                    # This is an un-identifiable line, it belongs ???
-                    print(f"  skipping line '{list_of_lines.pop(0)}'")
+                # Look for things that will be parsed, but ignored.
+                for parser in self.will_ignore:
+                    pre_length = len(list_of_lines)
+                    instances = parser(list_of_lines, comments, self)
+                    length = len(list_of_lines) - pre_length
+                    self.lines += length
+                    if (len(instances) > 0): break
                 else:
-                    from . import class_name
-                    from fmodpy.exceptions import ParseError
-                    raise(ParseError(f"\n\nEncountered unrecognized line while parsing {class_name(self)}:\n\n{list_of_lines.pop(0)}\n\n"))
+                    # This is an unknown block of code.
+                    if self.allowed_unknown:
+                        comments = ""
+                        # This is an un-identifiable line, it belongs ???
+                        print(f"  skipping line '{list_of_lines.pop(0)}'")
+                    else:
+                        from . import class_name
+                        from fmodpy.exceptions import ParseError
+                        raise(ParseError(f"\n\nEncountered unrecognized line while parsing {class_name(self)}:\n\n{list_of_lines.pop(0)}\n\n"))
         # Check for correct ending.
         if (self.needs_end and (not ended)):
             from fmodpy.exceptions import ParseError

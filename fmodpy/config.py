@@ -32,8 +32,8 @@ config_file         = ".fmodpy.py"
 # All of these variables should have expected types.
 BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
                     'show_warnings', 'debug_line_numbers']
-LIST_CONFIG_VARS = ['c_compiler_args', 'c_linker_args',
-                    'f_compiler_args', 'link_blas', 'link_lapack',
+LIST_CONFIG_VARS = ['c_compiler_args', 'c_linker_args', 'f_compiler_args',
+                    'link_omp', 'link_blas', 'link_lapack',
                     'disallowed_options', 'python_link_command']
 # File related maniplation arguments
 FORT_EXT = ".f90"
@@ -169,7 +169,7 @@ def load_config(**kwargs):
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
             if (l not in config["c_linker_args"]):
-                config["f_compiler_args"] += [l]
+                config["c_linker_args"] += [l]
 
     # If 'lblas' is True, then add BLAS compilation and
     # link arguments to the list of arguments already.
@@ -178,7 +178,7 @@ def load_config(**kwargs):
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
             if (l not in config["c_linker_args"]):
-                config["f_compiler_args"] += [l]
+                config["c_linker_args"] += [l]
 
     # If 'llapack' is True, then add LAPACK compilation and
     # link arguments to the list of arguments already.
@@ -187,7 +187,7 @@ def load_config(**kwargs):
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
             if (l not in config["c_linker_args"]):
-                config["f_compiler_args"] += [l]
+                config["c_linker_args"] += [l]
 
     # Set all of the configuration variables as module-wide globals.
     for var in config: fmodpy_config[var] = config[var]

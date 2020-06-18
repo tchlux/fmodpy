@@ -119,6 +119,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     should_rebuild = rebuild or should_rebuild_module(
         source_path, name, output_dir)
     if not should_rebuild:
+        print()
         print("No new modifications to '%s' module, exiting."%(name))
         print("_"*70)
         return importlib.import_module(name)
@@ -400,14 +401,16 @@ def autocompile_files(build_dir):
         successes = []
         for f in should_compile:
             # Try to compile all files that have "f" in the extension
-            print("Compiling '%s'.. "%(f), end="")
+            print(f"Compiling '{f}'.. ")
+            print(f" {' '.join([f_compiler]+f_compiler_args+[f])}")
             code, stdout, stderr = run([f_compiler]+f_compiler_args+[f],cwd=build_dir)
             if code == 0:
                 successes.append(f)
-                print("success.")
+                print(" success.")
             else:
-                failed.append(f)
-                print("failed.")
+                # Record failed compilations.
+                if f not in failed: failed.append(f)
+                print(" failed.")
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
                 if len(stdout) > 0:
                     print("STANDARD OUTPUT:")
@@ -417,9 +420,11 @@ def autocompile_files(build_dir):
                     print("\n".join(stderr))
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
         # Remove the files that were successfully compiled from
-        # the list of "should_compile"
+        # the list of "should_compile" and the list of "failed".
         for f in successes:
             should_compile.remove(f)
+            if f in failed: failed.remove(f)
+
     # Log the files that failed to compile.
     for f in should_compile: print(f"Failed to compile '{f}'.")
     # Return the list of object files created during compilation.

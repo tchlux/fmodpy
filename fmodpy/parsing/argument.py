@@ -224,7 +224,8 @@ class Argument:
                     default_shape = ', '.join(self._default_size()).lower()
                 else: default_shape = ','.join('1'*len(self.dimension))
                 if (self.optional):
-                    lines.append(f"    {py_name} = numpy.zeros(shape=(1), dtype='{np_type}', order='F')")
+                    not_present_shape = ','.join('1'*len(self.dimension))
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({not_present_shape}), dtype='{np_type}', order='F')")
                     lines.append(f"elif (type({py_name}) == bool) and ({py_name}):")
                 # Create lines for initializing the default values.
                 lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype='{np_type}', order='F')")
@@ -477,9 +478,18 @@ class Argument:
                 line.pop(0)
                 self.save = True
                 continue
+            # Read PARAMETER (discard this)
+            if (line[0] == "PARAMETER"):
+                line.pop(0)
+                continue
+            # Read EXTERNAL (discard this)
+            if (line[0] == "EXTERNAL"): 
+                line.pop(0)
+                continue
+            # Otherwise, this is an unrecognized argument.
             from fmodpy.config import fmodpy_print as print
             print()
-            print(f"Unrecognized part of Argument '{line[0]}'.")
+            print(f"Unrecognized part of Argument '{line[0]}'.\n")
             raise(NotImplementedError)
 
     # Print the Fortran string declaration of this argument.

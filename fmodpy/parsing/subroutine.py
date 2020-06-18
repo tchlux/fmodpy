@@ -1,6 +1,6 @@
 from .code import Code
 from . import parse_code, parse_argument, parse_use, parse_type, \
-    parse_implicit, parse_interface
+    parse_implicit, parse_interface, parse_subroutine, parse_function
 
 # ALLOCATABLE is not allowed to go from C -> Fortran. That means
 #  INTENT(IN) is not allowed generally, and inside of a passed
@@ -16,6 +16,7 @@ class Subroutine(Code):
                    (parse_interface, "interfaces"),
                    (parse_argument, "arguments"),
     ]
+    will_ignore = [parse_subroutine, parse_function]
 
     # Produce a string representation of this Subroutine object as it
     # appears in the Fortran source (NOT as the wrapper will appear).
@@ -176,7 +177,7 @@ class Subroutine(Code):
             # Need to define the interface to the C function that
             #   will be called by the internal Fortran wrapper.
             for i in self.interfaces:
-                for f in i.functions: lines += ["    "+l for l in f.fortc_interface()]
+                for f in i.functions:   lines += ["    "+l for l in f.fortc_interface()]
                 for f in i.subroutines: lines += ["    "+l for l in f.fortc_interface()]
             # Need to define the interface to the actual function
             # being called (if this is not part of a module).

@@ -15,7 +15,7 @@ FORT_TEXT_REPLACEMENTS = {
 }
 # Keep all comment lines and all lines from a file that start with the
 # following expressions (the file is converted to all upper case).
-ACCEPTABLE_LINE_STARTS = {'ABSTRACT', 'CHARACTER', 'END', 'EXTERNAL',
+ACCEPTABLE_LINE_STARTS = {'ABSTRACT', 'CHARACTER', 'END', # 'EXTERNAL',
                           'FUNCTION', 'IMPLICIT', 'INTEGER',
                           'INTERFACE', 'LOGICAL', 'MODULE',
                           'OPTIONAL', 'PRIVATE', 'PROCEDURE',

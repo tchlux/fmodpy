@@ -8,3 +8,5 @@
 #       Need to disallow "EXTERNAL" subroutines-as-arguments.
 
 
+# TODO: "LOGICAL A" is a valid declaration that is not accepted, need
+#       to look into when the "::" is required.

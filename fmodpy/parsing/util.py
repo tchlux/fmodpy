@@ -79,7 +79,7 @@ def simplify_fortran_file(in_file, old_fortran=False):
                 if (line[0] == "&"):
                     line = line[1:]
                 curr_line += line
-                if (line[-1] == "&"):
+                if ((len(line) > 0) and (line[-1] == "&")):
                     curr_line = curr_line[:-1]
                 else:
                     # Process the line into a common format
@@ -87,14 +87,15 @@ def simplify_fortran_file(in_file, old_fortran=False):
                     clean_line = clean_text(curr_line)
                     line = [v.strip() for v in clean_line.split()]
                     # Only take lines that are acceptable
-                    acceptable = ("!" in line[0])
-                    acceptable = acceptable or (line[0] in ACCEPTABLE_LINE_STARTS)
-                    if line[0] in IMMEDIATELY_EXCLUDE:
+                    acceptable = (len(line) > 0) and (
+                        ("!" in line[0]) or (line[0] in ACCEPTABLE_LINE_STARTS))
+                    # Check for certain exclusions (like "PROGRAM").
+                    if (len(line) > 0) and (line[0] in IMMEDIATELY_EXCLUDE):
                         from fmodpy.exceptions import FortranError
                         raise(FortranError(("A valid fortran python module cannot"+
                                             " contain '%s'.")%(line[0])))
-                    if acceptable:
-                        fort_file.append( " ".join(line) )
+                    # Store the line if it was acceptable.
+                    if acceptable: fort_file.append( " ".join(line) )
                     curr_line = ""
     return fort_file
 

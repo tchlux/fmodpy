@@ -31,7 +31,7 @@ f_compiler = "gfortran"
 f_compile_arg = "-c"
 f_compiler_options = ["-fPIC", "-O3"]
 # c_linker = "gcc"
-c_linker = "/usr/local/Cellar/gcc/9.3.0/bin/gcc-9"
+c_linker = "/usr/local/Cellar/gcc/9.3.0_1/bin/gcc-9"
 c_compiler = None # "gcc"
 c_link_args = ["-lgfortran"]
 module_compile_args = ["-O3"]
@@ -61,6 +61,7 @@ class FortranError(Exception):       pass
 class LinkError(Exception):          pass
 class SizeError(Exception):          pass
 class NameError(Exception):          pass
+class UsageError(Exception):         pass
 class NotReadyYet(Exception):        pass
 
 # Check for the existence of the C-linker.

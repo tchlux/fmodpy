@@ -1,11 +1,8 @@
-from .code import Code, parse_code
-from .use import parse_use
-from .implicit_none import parse_implicit
-from .argument import parse_argument
-from .interface import parse_interface
-from .type import parse_type
-from .subroutine import parse_subroutine
-from .function import parse_function
+from .code import Code
+from . import parse_use, parse_implicit, parse_argument, \
+    parse_interface, parse_type, parse_subroutine, parse_function
+from .subroutine import Subroutine
+from .function import Function
 
 
 # --------------------------------------------------------------------
@@ -79,6 +76,7 @@ class Module(Code):
     # module (assuming the first line is the first line *inside* of
     # this module).
     def parse(self, list_of_lines):
+        raise(NotImplementedError)
         known_public = []
         known_private = []
         default_list = known_public
