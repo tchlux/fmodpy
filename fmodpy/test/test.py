@@ -31,10 +31,11 @@
 #     modules with custom type declarations
 #     type EXTENDS (copy the other type, add more definitions)
 #     fixed format Fortran inputs (Fortran 77)
-
+# 
 #     
 # "Module" should be put inside a Python class. Then I can define
 # proper "getter" and "setter" behaviors for internal attributes.
+# 
 
 
 def run_tests():
@@ -49,9 +50,6 @@ def run_tests():
     from fmodpy.test.int64 import test as test_int64
     from fmodpy.test.logical import test as test_logical
 
-    # Remove all the existing build directories and compiled modules.
-    #   trash */fmodpy* ; trash */*.so ; noPC    
-
     # Run all of the tests.
     test_real32()
     test_real64()
@@ -59,11 +57,6 @@ def run_tests():
     test_int32()
     test_int64()
     test_logical()
-
-    # Run one of the tests again (reimported code).
-    test_real64()
-
-
 
 
 if __name__ == "__main__":

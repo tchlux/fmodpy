@@ -4,7 +4,7 @@ import os, sysconfig
 omp                 = False
 blas                = False
 lapack              = False
-verbose             = False
+verbose             = True
 autocompile         = True
 wrap                = True
 rebuild             = False
@@ -12,12 +12,8 @@ show_warnings       = True
 debug_line_numbers  = False
 implicit_typing     = False
 log_file            = os.devnull
-c_compiler          = None # 'gcc'
-c_compiler_args     = '-O3'
-c_linker            = 'gcc'
-c_linker_args       = '-lgfortran'
 f_compiler          = 'gfortran'
-f_compiler_args     = '-c -fPIC -O3'
+f_compiler_args     = '-fPIC -shared -O3'
 link_omp            = '-fopenmp'
 link_blas           = '-lblas'
 link_lapack         = '-lblas -llapack'
@@ -32,12 +28,13 @@ config_file         = ".fmodpy.py"
 # All of these variables should have expected types.
 BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
                     'show_warnings', 'debug_line_numbers']
-LIST_CONFIG_VARS = ['c_compiler_args', 'c_linker_args', 'f_compiler_args',
-                    'link_omp', 'link_blas', 'link_lapack',
-                    'disallowed_options', 'python_link_command']
+LIST_CONFIG_VARS = ['f_compiler_args', 'link_omp', 'link_blas',
+                    'link_lapack', 'disallowed_options',
+                    'python_link_command']
 # File related maniplation arguments
+PY_EXT = ".py"
 FORT_EXT = ".f90"
-CYTHON_EXT = ".pyx"
+PYTHON_WRAPPER_EXT = "_from_py"
 FORT_WRAPPER_EXT = "_bind_c"+FORT_EXT
 GET_SIZE_PROG_FILE = "fmodpy_get_size"+FORT_EXT
 GET_SIZE_EXEC_FILE = "fmodpy_get_size"
@@ -50,8 +47,16 @@ GET_SIZE_EXEC_FILE = "fmodpy_get_size"
 # Custom print function (allows for line numbers to be automatically
 # added to all print statements, easily controls verbosity level).
 def fmodpy_print(*args, **kwargs):
-    global log_file, verbose, debug_line_numbers    
+    # Skip all print statements if verbosity is off.
+    global verbose
+    if (not verbose): return
+    # Set the log file.
+    global log_file
+    if (log_file == os.devnull): 
+        import sys
+        log_file = sys.stdout
     # Add information about where the bit is printed from, if turned on.
+    global debug_line_numbers    
     if debug_line_numbers:
         import inspect
         # Add the calling file and line to the print statement
@@ -60,12 +65,6 @@ def fmodpy_print(*args, **kwargs):
         calling_file = os.path.basename(calling_file)
         calling_line = calling_function.lineno
         args += (f'({calling_file} line {calling_line})',) 
-    # Skip all print statements if verbosity is off.
-    if (not verbose): return
-    global log_file
-    if (log_file == os.devnull): 
-        import sys
-        log_file = sys.stdout
     # For all print operations, force a "flush" output.
     kwargs["file"] = log_file
     kwargs["flush"] = True
@@ -117,8 +116,9 @@ def load_config(**kwargs):
     # Identify those elements of "fmodpy.config" that should not be
     # set or considered when printing out configuration.
     modules = {"os", "sysconfig"}
+    func_type = type(lambda:None)
     functions = {k for k in fmodpy_config if
-                 type(fmodpy_config[k]) == type(lambda:None)}
+                 type(fmodpy_config[k]) == func_type}
     # Set the default configuration as the current configuration.
     config = { k:fmodpy_config[k] for k in fmodpy_config
                if (k[0].isalpha() and k.islower()) and
@@ -138,7 +138,7 @@ def load_config(**kwargs):
     config.update( kwargs )
 
     # Make sure the path names do not have spaces.
-    if any(' ' in str(config[k]) for k in ('f_compiler', 'c_linker', 'c_compiler')):
+    if any(' ' in str(config[k]) for k in ('f_compiler',)):
         from fmodpy.exceptions import NotAllowedPath
         raise(NotAllowedPath("Spaces cannot be included in compiler or linker paths."))
 
@@ -168,8 +168,6 @@ def load_config(**kwargs):
         for l in config["link_omp"]:
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
-            if (l not in config["c_linker_args"]):
-                config["c_linker_args"] += [l]
 
     # If 'lblas' is True, then add BLAS compilation and
     # link arguments to the list of arguments already.
@@ -177,8 +175,6 @@ def load_config(**kwargs):
         for l in config["link_blas"]:
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
-            if (l not in config["c_linker_args"]):
-                config["c_linker_args"] += [l]
 
     # If 'llapack' is True, then add LAPACK compilation and
     # link arguments to the list of arguments already.
@@ -186,8 +182,6 @@ def load_config(**kwargs):
         for l in config["link_lapack"]:
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
-            if (l not in config["c_linker_args"]):
-                config["c_linker_args"] += [l]
 
     # Set all of the configuration variables as module-wide globals.
     for var in config: fmodpy_config[var] = config[var]

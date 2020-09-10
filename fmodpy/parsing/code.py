@@ -136,13 +136,13 @@ class Code:
                 lines += instance.generate_fortran()
         return lines
 
-    # Parse the contained objects into cython code lines, making
+    # Parse the contained objects into python code lines, making
     # Python-callable code for all contained objects in this Code.
-    def generate_cython(self):
+    def generate_python(self):
         lines = []
         for (_, name) in self.can_contain:
             for instance in getattr(self, name):
-                lines += instance.generate_cython() + ['']
+                lines += instance.generate_python() + ['']
         # Return the full list of lines.
         return lines
 

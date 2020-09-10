@@ -73,6 +73,7 @@ FUNCTION TEST_EXTENDED(OPT_ARRAY_IN, KNOWN_OPT_ARRAY_OUT,&
            KNOWN_OPT_ARRAY_OUT(I) = I
         END DO
      END IF
+
   END IF
 
   ! Allocate the optional array output and assign its values.
@@ -81,6 +82,7 @@ FUNCTION TEST_EXTENDED(OPT_ARRAY_IN, KNOWN_OPT_ARRAY_OUT,&
      DO I = 1, SIZE(OPT_ALLOC_ARRAY_OUT)
         OPT_ALLOC_ARRAY_OUT(I) = SIZE(OPT_ALLOC_ARRAY_OUT) - (I-1)
      END DO
+
   END IF
   
   ! Allocate the required array output to the specified size.

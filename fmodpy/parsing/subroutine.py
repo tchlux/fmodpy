@@ -325,27 +325,22 @@ class Subroutine(Code):
         except Exception as exception: raise(exception)
 
 
-    # Generate Python-callable Cython code that accesses this Subroutine.
-    def generate_cython(self):
+    # Generate Python code that accesses this Subroutine.
+    def generate_python(self):
         from fmodpy.config import fmodpy_print as print
-        print(f"generating Cython for {self.type} {self.name}..")
+        print(f"generating Python for {self.type} {self.name}..")
         lines = [ '',
                   "# ----------------------------------------------",
                  f"# Wrapper for the Fortran subroutine {self.name}",
                   '']
         py_name = self.name.lower()
-        # Add the "external C" definition.
-        c_input = []
-        for arg in self.arguments: c_input += arg.c_input()
-        lines += [f"cdef extern:\n    void c_{py_name}({', '.join(c_input)})",'']
         # Add the Python-callable function.
         py_input = []
         # Cycle args (make sure the ones that are optional are listed last).
         for arg in sorted(self.arguments, key=lambda a: int(a._is_optional())):
             py_input += arg.py_input()
-        # Add the documentation (use "cython.binding" to make "help" work).
-        lines += [f"@cython.binding(True)",
-                  f"def {py_name}({', '.join(py_input)}):",
+        # Declare the function and add the documentation.
+        lines += [f"def {py_name}({', '.join(py_input)}):",
                   f"    '''{self.docs}'''"]
         # Add the declaration lines.
         py_declare = []
@@ -358,7 +353,7 @@ class Subroutine(Code):
         py_call = []
         for arg in self.arguments: py_call += arg.py_call()
         lines += ['',"    # Call C-accessible Fortran wrapper.",
-                  f"    c_{py_name}({', '.join(py_call)})", '']
+                    f"    clib.c_{py_name}({', '.join(py_call)})", '']
         # Add post-processing line.
         py_after = []
         for arg in self.arguments:
@@ -370,7 +365,7 @@ class Subroutine(Code):
         # Add return line.
         py_return = []
         for arg in self.arguments: py_return += arg.py_return()
-        lines += ["    # Return final results, 'INTENT(OUT)' arguments only.",
+        lines += [ "    # Return final results, 'INTENT(OUT)' arguments only.",
                   f"    return {', '.join(py_return)}"]
         return lines
 

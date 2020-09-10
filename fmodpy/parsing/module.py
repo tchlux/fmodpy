@@ -65,11 +65,11 @@ class Module(Code):
     def eval_sizes(self, build_dir):
         for code in self.contains: code.eval_sizes(build_dir)
 
-    # Generate Python-callable Cython code that calls
-    def generate_cython(self):
+    # Generate Python code.
+    def generate_python(self):
         # Add access points for the contained subroutines and functions.
         lines = []
-        for code in self.contains: lines += code.generate_cython() + ['']
+        for code in self.contains: lines += code.generate_python() + ['']
         return lines
 
     # Given a list of lines (of a source Fortran file), parse out this

@@ -1,0 +1,22 @@
+SUBROUTINE ADD(A, B, C)
+  USE ISO_FORTRAN_ENV, ONLY: INT64
+  INTEGER(KIND=INT64), INTENT(IN) :: A, B
+  INTEGER(KIND=INT64), INTENT(OUT) :: C
+  WRITE (*,*) 'ADD adding'
+  WRITE (*,*) 'A:', A
+  WRITE (*,*) 'B:', B
+  C = A + B
+  WRITE (*,*) 'C:', C
+  WRITE (*,*) 'ADD returning'
+END SUBROUTINE ADD
+
+SUBROUTINE SUMALL(A, B)
+  USE ISO_FORTRAN_ENV, ONLY: REAL64
+  REAL(KIND=REAL64), DIMENSION(:), INTENT(IN) :: A
+  REAL(KIND=REAL64), INTENT(OUT) :: B
+  WRITE (*,*) 'SUMALL summing'
+  WRITE (*,*) 'A:', A
+  B = SUM(A(:))
+  WRITE (*,*) 'B:', B
+  WRITE (*,*) 'SUMALL returning'
+END SUBROUTINE SUMALL

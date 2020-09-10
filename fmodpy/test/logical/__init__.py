@@ -3,7 +3,7 @@ def test():
     import os
     dir_name = os.path.dirname(os.path.abspath(__file__))
     test_name = os.path.basename(dir_name)
-    fort_file = os.path.join(dir_name, f"{test_name}.f03")
+    fort_file = os.path.join(dir_name, f"test_{test_name}.f03")
     build_dir = os.path.join(dir_name, f"fmodpy_{test_name}")
     print(f"  {test_name}..", end=" ", flush=True)
     import fmodpy
@@ -23,6 +23,8 @@ def test():
     # End specific testing code.
     # ---------------------------------------------------------------
     print("passed", flush=True)
+    import shutil
+    shutil.rmtree(os.path.join(dir_name,f"test_{test_name}"))
 
 if __name__ == "__main__":
     test()

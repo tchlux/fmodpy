@@ -48,6 +48,9 @@ def test():
     # End specific testing code.
     # ---------------------------------------------------------------
     print("passed", flush=True)
+    import shutil
+    shutil.rmtree(os.path.join(dir_name,f"test_{test_name}"))
 
 if __name__ == "__main__":
     test()
+

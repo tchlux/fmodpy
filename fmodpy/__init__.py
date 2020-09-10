@@ -10,7 +10,7 @@ del f
 import fmodpy.config
 
 # Import the main features of this package.
-from .fmodpy import fimport, configure, make_python_wrapper, make_python_module
+from .fmodpy import fimport, configure, make_wrapper
 
 # Set "__all__" so that "from fmodpy import *" returns expected stuff.
-__all__ = ["fimport", "configure", "make_python_wrapper", "make_python_module"]
+__all__ = ["fimport", "configure", "make_wrapper"]

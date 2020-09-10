@@ -1,0 +1,42 @@
+! This automatically generated Fortran wrapper file allows codes
+! written in Fortran to be called directly from C and translates all
+! C-style arguments into expected Fortran-style arguments (with
+! assumed size, local type declarations, etc.).
+
+
+SUBROUTINE C_ADD(A, B, C) BIND(C)
+  USE ISO_FORTRAN_ENV, ONLY: INT64
+  IMPLICIT NONE
+  INTEGER(KIND=INT64), INTENT(IN) :: A
+  INTEGER(KIND=INT64), INTENT(IN) :: B
+  INTEGER(KIND=INT64), INTENT(OUT) :: C
+  INTERFACE
+    SUBROUTINE ADD(A, B, C)
+      USE ISO_FORTRAN_ENV, ONLY: INT64
+      INTEGER(KIND=INT64), INTENT(IN) :: A
+      INTEGER(KIND=INT64), INTENT(IN) :: B
+      INTEGER(KIND=INT64), INTENT(OUT) :: C
+    END SUBROUTINE ADD
+  END INTERFACE
+  WRITE (*,*) 'C_ADD calling ADD'
+  CALL ADD(A, B, C)
+  WRITE (*,*) 'C_ADD returning'  
+END SUBROUTINE C_ADD
+
+
+SUBROUTINE C_SUMALL(A_SIZE_1, A, B) BIND(C)
+  USE ISO_FORTRAN_ENV, ONLY: REAL64
+  INTEGER, INTENT(IN) :: A_SIZE_1
+  REAL(KIND=REAL64), DIMENSION(A_SIZE_1), INTENT(IN) :: A
+  REAL(KIND=REAL64), INTENT(OUT) :: B
+  INTERFACE
+     SUBROUTINE SUMALL(A, B)
+       USE ISO_FORTRAN_ENV, ONLY: REAL64
+       REAL(KIND=REAL64), DIMENSION(:), INTENT(IN) :: A
+       REAL(KIND=REAL64), INTENT(OUT) :: B
+     END SUBROUTINE SUMALL
+  END INTERFACE
+  WRITE (*,*) 'C_SUMALL calling SUMALL'
+  CALL SUMALL(A, B)
+  WRITE (*,*) 'C_SUMALL returning'
+END SUBROUTINE C_SUMALL

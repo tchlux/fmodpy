@@ -151,6 +151,7 @@ class Argument:
         elif (not self._is_input()):
             names += [f"{self.c_types[self.size]}** {self.name.lower()}"]
         else:
+            from fmodpy.config import fmodpy_print as print
             print("Currently fmodpy does not support ALLOCATABLE inputs.")
             raise(NotImplementedError)
         return names
@@ -161,21 +162,13 @@ class Argument:
         if (not self._allowed_input()): return []
         # This object is now either mutable or partially an input.
         elif self._is_optional(): return [self.name.lower()+"=None"]
-        # Return based on size.
-        if (self.size in self.c_types):
-            if (self.dimension is None): dim = ""
-            else: dim = f"[{','.join([':']*len(self.dimension))}]"
-            return [f"{self.c_types[self.size]}{dim} {self.name.lower()}"]
-        else:
-            from fmodpy.config import fmodpy_print as print
-            print(f"ERROR: unknown size '{self.size}'")
-            raise(NotImplementedError)
+        else: return [self.name.lower()]
         
     # The lines of Python code to execute before the Fortran call.
     def py_declare(self):
+        lines = []
         # This is where output arrays whose dimensions are known can
         # be initialized. Everything else behaves normally.
-        lines = []
         py_name = self.name.lower()
         # Get the C type.
         if (self.size in self.c_types): c_type = self.c_types[self.size]
@@ -183,69 +176,71 @@ class Argument:
         # Get the NumPy type.
         if (self.size in self.np_types): np_type = self.np_types[self.size]
         else:                            raise(NotImplementedError)
-        # If this is literally an optional, a boolean is required.
-        if self.optional:
-            lines.append(f"cdef bint {py_name}_present = True")
         # Define the dimension size variables if appropriate.
         if (self.dimension is not None):
             for i in range(len(self.dimension)):
-                if (self._is_optional()): value = " = 0"
-                elif (self._allowed_input()): value = f" = {py_name}.shape[{i}]"
-                else: value = ""
-                lines.append(f"cdef int {py_name}_dim_{i+1}{value}")
+                if (self._is_optional() or self.allocatable):
+                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int(0)")
+                elif (self._allowed_input()):
+                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
+        else:
+            from fmodpy.config import fmodpy_print as print
+            print(f"Argument '{py_name}' had no dimension attribute..")
+        # If this is literally an optional, a boolean is required.
+        if self.optional:
+            lines.append(f"{py_name}_present = ctypes.c_bool(True)")
         # If inputs can be given, and they're optional, checks are needed.
-        is_pointer = False
         if (self._allowed_input() and self._is_optional()):
             lines.append(f"if ({py_name} is None):")
             # If this is an optional argument, make it "not present".
             if self.optional:
-                lines.append(f"    {py_name}_present = False")
-            # Set the default value.
+                lines.append(f"    {py_name}_present = ctypes.c_bool(False)")
+            # If this is a singleton, set its default value.
             if (self.dimension is None):
                 lines.append(f"    {py_name} = {self.default_singleton}")
-                lines.append(f"cdef {c_type} {py_name}_local = {py_name}")
+                lines.append(f"{py_name}_local = {c_type}({py_name})")
+            # This has a dimension AND is allocatable.
             elif (self.allocatable):
-                lines.append(f"cdef {c_type}* {py_name}_local")
-                dim_def = ""
-                dim_ind = ""
+                lines.append(f"{py_name}_local = ctypes.c_void_p()")
                 if (self._is_input()):
-                    # Make sure the address is of the first element in memory.
-                    if (self.dimension is not None):
-                        nd = len(self.dimension)                    
-                        dim_def = "[" + ",".join(":"*nd) + "]"
-                        dim_ind = "[" + ",".join("0"*nd) + "]"
-                    lines.append(f"cdef {c_type}{dim_def} {py_name}_temp")
                     lines.append(f"if ({py_name}_present):")
-                    lines.append(f"    {py_name}_temp = {py_name}")
-                    lines.append(f"    {py_name}_local = &{py_name}_temp{dim_ind}")
+                    lines.append(f"    {py_name}_local = numpy.asarray({py_name}, dtype={c_type}, order='F')")
+            # This has a dimension, but is NOT allocatable.
             else:
                 # Either initialize with the known size, or with size "1".
                 if (self._known_size()):
                     default_shape = ', '.join(self._default_size()).lower()
                 else: default_shape = ','.join('1'*len(self.dimension))
+                # If this is optional (not present shape is always 1).
                 if (self.optional):
                     not_present_shape = ','.join('1'*len(self.dimension))
-                    lines.append(f"    {py_name} = numpy.zeros(shape=({not_present_shape}), dtype='{np_type}', order='F')")
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({not_present_shape}), dtype={c_type}, order='F')")
                     lines.append(f"elif (type({py_name}) == bool) and ({py_name}):")
                 # Create lines for initializing the default values.
-                lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype='{np_type}', order='F')")
+                lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
                 for i in range(len(self.dimension)):
-                    lines.append(f"    {py_name}_dim_{i+1} = {py_name}.shape[{i}]")
+                    lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
                 # Check for Fortran-continuity if multi dimensional.
                 lines += [f"elif (not numpy.asarray({py_name}).flags.f_contiguous):",
-                          f"    raise(Exception(\"The numpy array given as argument '{py_name}' was not f_contiguous.\"))",
+                          f"    import warnings",
+                          f"    warnings.warn(\"The numpy array provided for argument '{py_name}' was not f_contiguous. Automatically constructing a copy.\")",
+                          f"    {py_name} = numpy.asarray({py_name}, order='F')",
                           f"else:"]
                 for i in range(len(self.dimension)):
-                    lines.append(f"    {py_name}_dim_{i+1} = {py_name}.shape[{i}]")
-                # Define the Cython memory view style interface to this object.
-                lines.append(f"cdef {c_type}[{','.join([':']*len(self.dimension))}] {py_name}_local = {py_name}")
+                    lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
+                lines.append(f"{py_name}_local = {py_name}")
         # If this is an output-only allocatable, declare a local pointer.
         elif ((not self.optional) and self._is_output() and self.allocatable):
-            lines.append(f"cdef {c_type}* {py_name}_local")
-            is_pointer = True
-        # Otherwise this an immutable type, declare it locally.
+            lines.append(f"{py_name}_local = ctypes.c_void_p()")
+        # Otherwise this an output immutable type, declare it locally.
         elif (not self._allowed_input()):
-            lines.append(f"cdef {c_type} {py_name}")
+            lines.append(f"{py_name} = {c_type}()")
+        # This is an input.
+        elif (self._is_input()):
+            if (self.dimension is None):
+                lines.append(f"{py_name} = {c_type}({py_name})")
+            else:
+                lines.append(f"{py_name} = numpy.asarray({py_name}, dtype={c_type}, order='F')")
         # Return lines of declaration code.
         return lines
 
@@ -254,19 +249,21 @@ class Argument:
         names = []
         py_name = self.name.lower()
         # Add a boolean "_PRESENT" for this variable if optional.
-        if (self.optional): names.append("&"+py_name+"_present")
+        if (self.optional): names.append("ctypes.byref("+py_name+"_present)")
         # Add extra arguments for the dimension sizes.
         if (self.dimension is not None):
             for i in range(len(self.dimension)):
-                names.append(f"&{py_name}_dim_{i+1}")
+                names.append(f"ctypes.byref({py_name}_dim_{i+1})")
         # Append the actual name of this variable.
-        names.append("&"+py_name)
+        names.append(py_name)
         # If this variable is optional, it has a local C declaration.
         if (self.allocatable or self._is_optional()): names[-1] += "_local"
         # If this is a memory view, then access the first element
         # (start of block of memory).
-        if (self.dimension is not None) and (not self.allocatable):
-            names[-1] += "["+",".join("0"*len(self.dimension))+"]"
+        if ((self.dimension is not None) and (not self.allocatable)):
+            names[-1] = "ctypes.c_void_p(" + names[-1] + ".ctypes.data)"
+        else:
+            names[-1] = "ctypes.byref(" + names[-1] + ")"
         # Return the list of names.
         return names
 
@@ -282,22 +279,30 @@ class Argument:
                 np_size = f"numpy.NPY_{self.np_types[self.size].upper()}"
             else: raise(NotImplementedError)
             # Get the pointer to the first index.
-            local_dims = [f"{py_name}_dim_{i+1}" for i in range(len(self.dimension))]
+            local_dims = [f"{py_name}_dim_{i+1}.value" for i in range(len(self.dimension))]
             # Compute the size of the (flattened) array.
-            lines += [f"cdef numpy.npy_intp {py_name}_size = ({') * ('.join(local_dims)})"]
+            lines += [f"{py_name}_size = ({') * ('.join(local_dims)})"]
+            shape = ','.join(local_dims[::-1])
+            c_type = self.c_types[self.size]
             if self.optional:
                 lines += [f"if ({py_name}_present):"]
                 # Get flat array pointer and reshape by the dimensions
                 # reversed, then transpose (f_contiguous).
-                lines += [f"    {py_name} = ptr_to_numpy_array({py_name}_size, {np_size}, &{py_name}_local{'[0]'*len(self.dimension)})"]
-                lines += [f"    {py_name} = {py_name}.reshape(({','.join(local_dims[::-1])})).T"]
+                lines += [f"    {py_name}_local = ctypes.cast({py_name}_local, ctypes.POINTER({c_type}*{py_name}_size))"]
+                lines += [f"    {py_name} = numpy.array({py_name}_local.contents, copy=False)"]
+                # If this is a tensor, then reshape it (in C style, row major).
+                if (len(self.dimension) > 1):
+                    lines += [f"    {py_name} = {py_name}.reshape({shape}).T"]
                 # Otherwise, (if not present) this output is None.
                 lines += [f"else: {py_name} = None"]
             else:
                 # Get flat array pointer and reshape by the dimensions
                 # reversed, then transpose (f_contiguous).
-                lines += [f"{py_name} = ptr_to_numpy_array({py_name}_size, {np_size}, {py_name}_local)"]
-                lines += [f"{py_name} = {py_name}.reshape(({','.join(local_dims[::-1])})).T"]
+                lines += [f"{py_name}_local = ctypes.cast({py_name}_local, ctypes.POINTER({c_type}*{py_name}_size))"]
+                lines += [f"{py_name} = numpy.array({py_name}_local.contents, copy=False)"]
+                # If this is a tensor, then reshape it (in C style, row major).
+                if (len(self.dimension) > 1):
+                    lines += [f"{py_name} = {py_name}.reshape({shape}).T"]
         # Return all lines.
         return lines
 
@@ -313,8 +318,8 @@ class Argument:
             # Add this argument to the output.
             py_name = self.name.lower()
             value = f"{py_name}{name_ext}"
-            # Cast to a NumPy array for return (if this is an array).
-            if (self.dimension is not None): value = f"numpy.asarray({value})"
+            # Retrieve the Python "value" of the C object if appropriate.
+            if (self.dimension is None): value += ".value"
             # Return None for missing optional returns.
             if self.optional: names.append(f"({value} if {py_name}_present else None)")
             else:             names.append(f"{value}")
@@ -387,9 +392,11 @@ class Argument:
                     func_replacement = f"{argument}.size"
                 else:
                     name = argument[:argument.index(",")]
-                    dim = argument[argument.index(","):]
-                    try:    dim = str(int(dim) - 1)
-                    except: dim += "-1"
+                    dim = argument[argument.index(",")+1:]
+                    dim = str(int(dim) - 1)
+                    # TODO: Not sure why this was a try-except, need a test!
+                    # try:    
+                    # except: dim += "-1"
                     func_replacement = f"{name}.shape[{dim}]"
                 # Replace float division with integer division in python.
                 size = before_call + func_replacement + after_call
