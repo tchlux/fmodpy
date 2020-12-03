@@ -14,13 +14,46 @@
 # 
 #   configure -- Three behaviors related to `fmodpy` configuration:
 #                  no arguments -> Print current configuration and return.
-#                  str, *args -> Remove these configurations from global config file.
-#                  key=value, **kwargs -> Assign this configuration in global config file.
+#                  str, str, ... -> Remove these configurations from global config file.
+#                  key=value, ... -> Assign these configurations in global config file.
 # 
+# 
+# --------------------------------------------------------------------
+# 
+#                         DEVELOPMENT
+#                            PLANS
+# 
+# - load Modules as a Python class
+# --- use properties to place getter and setter functions over
+#     internal public attributes of the Fortran module
+# --- define all internal subroutines and functions as static methods
+# 
+# - support custom types defined in Fortran
+# --- parse the custom type and determine its contents in terms of basic types
+# --- generate a matching C struct using ctypes to the custom type
+# --- identify proper allocation schema in numpy to make sure memory
+#     maps correctly into Fortran
+# 
+# - support procedures as arguments
+# --- construct C function in Python (with ctypes) that translates C 
+#     style data into Python compatible data, calls the Python 
+#     function that was passed in as an argument, then translates the
+#     results back into C style data for return
+# --- construct a BIND(C) Fortran wrapper function that translates
+#     arguments from Fortran style into C style and calls the C 
+#     (Python) function from Fortran, nested in a MODULE with PUBLIC
+#     variables that assign the address of the C function
+# --- pass the memory address of the C function in Python to Fortran
+#     wrapper, use that address to assign a local Fortran function 
+#     in the BIND(C) wrapper module that calls Python C function
+# 
+# - extend test cases to achieve (near) 100% coverage of all lines
+# 
+# 
+# --------------------------------------------------------------------
 
 # Overwrite the "print" function to add "FMODPY" specific printouts.
 from fmodpy.config import fmodpy_print as print
-
 
 # Function for automating the entire fortran<->python wrapping
 #   process. This is the top-level function built for standard usage.
@@ -28,9 +61,10 @@ from fmodpy.config import fmodpy_print as print
 #   output module as well as the source fortran in order to only
 #   re-compile when necessary. Automatically wraps fortran, makes
 #   symbolic links to all files in the source directory as potential
-#   dependencies, generates a wrapper in Fortran, generates a wrapper
-#   in Cython, then compiles all of the above into a single Python
-#   module that can be imported (which is also returned).
+#   dependencies for building, generates a wrapper in Fortran, 
+#   generates a wrapper using Python ctypes module, then defines a 
+#   Python module that compiles the wrappers and Fortran source,
+#   providing a Python interface to the Fortran code.
 # 
 #  INPUTS:
 #    input_fortran_file -- str, relative or absolute path to fortran source.
@@ -52,7 +86,7 @@ from fmodpy.config import fmodpy_print as print
 #                     see `help(fmodpy)` for more information, or
 #                     run again with 'verbose=True' to see options.
 # 
-#   KEYWORD OPTIONS:
+#   KEYWORD OPTIONS (some important ones, there are more):
 #    autocompile -- bool, whether or not automatic compilation of
 #                   dependancies should be attempted.
 #    rebuild     -- bool, True if you want to rebuild even though the
@@ -102,7 +136,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if not legal_module_name(name):
         from fmodpy.exceptions import NameError
         raise(NameError((f"'{name}' is not an allowed module name,\n"+
-                         " must match the regexp `^[a-zA-z_]+"+
+                         " must match the regexp `^[a-zA-Z_]+"+
                          "[a-zA-Z0-9_]*`. Set the name with:\n"+
                          " fmodpy.fimport(<file>, name='<legal name>')"+
                          " OR\n $ fmodpy <file> name=<legal_name>")))
@@ -116,7 +150,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if not should_rebuild:
         print()
         print("No new modifications to '%s' module, exiting."%(name))
-        print("_"*70)
+        print("^"*70)
         return importlib.import_module(name)
 
     # Generate the names of files that will be created by this
@@ -141,15 +175,15 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     # Prepare the build directory, link in the necessary files.
     build_dir, temp_dir = prepare_build_directory(source_dir, build_dir)
 
-    # Initialize the list of link files if they were not given.
-    if (depends_files is None): depends_files = []
+    # Initialize the list of depended files if they were not given.
+    if (depends_files is None): depends_files = [source_file]
     # Automatically compile fortran files.
     if autocompile:
         print("Attempting to autocompile..")
         built, failed = autocompile_files(build_dir)
-        if (len(built) > 0):  print("  succeeded:", built)
-        if (len(failed) > 0): print("  failed:   ", failed)
-        depends_files = depends_files + built
+        if (len(built) > 0):  print(" succeeded:", built)
+        if (len(failed) > 0): print(" failed:   ", failed)
+        depends_files = built + depends_files
         print()
 
     # Write the wrappers to the files so they can be compiled.
@@ -162,15 +196,14 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (wrap or (not fortran_wrapper_exists) or (not python_wrapper_exists)):
         fortran_wrapper, python_wrapper = make_wrapper(
             source_path, build_dir, name)
-    # Fill all the missing components of the python_wrapper string.
-    python_wrapper = python_wrapper.format(
-        f_compiler = f_compiler,
-        shared_object_name = name + ".so",
-        f_compiler_args = " ".join(f_compiler_args),
-        dependencies = ([os.path.basename(f) for f in depends_files] +
-                        [os.path.basename(fortran_wrapper_path)]),
-        module_name = name
-    )
+        # Fill all the missing components of the python_wrapper string.
+        python_wrapper = python_wrapper.format(
+            f_compiler = f_compiler,
+            shared_object_name = name + ".so",
+            f_compiler_args = " ".join(f_compiler_args),
+            dependencies = ([os.path.basename(f) for f in depends_files] +
+                            [os.path.basename(fortran_wrapper_path)])
+        )
     # Write the wrapper files if this program is supposed to.
     if (not fortran_wrapper_exists) or wrap:
         with open(fortran_wrapper_path, "w") as f: f.write( fortran_wrapper )
@@ -188,7 +221,15 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if not (build_dir == output_dir):
         # Remove the existing wrapper module if it exists.
         if os.path.exists(final_module_path):
-            print(f" removing existing (outdated) copy of '{name}'..")
+            # Keep old directories as trash (TO BE REMOVED).
+            i = 1
+            prefix = "_OLD-%d"
+            while (os.path.exists(final_module_path + prefix%i)): i += 1
+            old_module_path = final_module_path + prefix%i
+            print(f" moving existing (old) module to '{old_module_path}'..")
+            shutil.move(final_module_path, old_module_path)
+            # Remove old directories permanently.
+            # print(f" removing existing (outdated) copy of '{name}'..")
             # shutil.rmtree(final_module_path)
         # Move the compiled wrapper to the destination.
         shutil.move(build_dir, final_module_path)
@@ -212,108 +253,6 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     sys.path.pop(0)
     # Return the module to be stored as a variable.
     return module
-
-# ====================================================================
-
-# Function for compiling and creating a python module out of the
-# prepared fortran + wrapper code.
-def make_python_module(mod_name, build_dir, fortran_wrapper_path,
-                       cython_wrapper_path, link_files):
-    import os, sys, importlib
-    # Load the configuration (in case this function is called directly).
-    from fmodpy.config import load_config
-    load_config()
-    # Import fmodpy configurations variables.
-    from fmodpy.config import run, f_compiler, f_compiler_args, c_compiler, \
-        c_compiler_args, c_linker, c_linker_args, python_link_command
-    from fmodpy.parsing import before_dot
-
-    # Compile the fortran wrapper.
-    fortran_wrapper_file = os.path.basename(fortran_wrapper_path)
-    print(f"Compiling '{fortran_wrapper_file}'.. ", end="")
-    wrap_code, stdout, stderr = run([f_compiler]+["-c"]+f_compiler_args
-                                    +[fortran_wrapper_file], cwd=build_dir)
-    if wrap_code != 0:
-        print("failed.\n")
-        print("\n".join(stderr))
-        from fmodpy.exceptions import CompileError
-        raise(CompileError("\nError when compiling Fortran wrapper (fmodpy bug?)\n"))
-    print("success.")
-
-    # Add the compiled Fortran wrapper file to the list of linked files.
-    fortran_wrapper_file_object = before_dot(fortran_wrapper_file) + ".o"
-    if fortran_wrapper_file_object not in link_files:
-        link_files.append( fortran_wrapper_file_object )
-
-    print("Compiling extension module using setup..")
-    print("="*70)
-    print()
-
-    # Create a simple Python file that will build the extension.
-    lines = [
-        "from distutils.core import setup",
-        "from distutils.extension import Extension",
-        "from Cython.Build import cythonize",
-        "import numpy",
-        "",
-        "mod_name = '"+mod_name+"'",
-        "cython_wrapper_file = '"+os.path.basename(cython_wrapper_path)+"'",
-        "c_compiler_args = "+str(c_compiler_args),
-        "c_linker_args = "+str(c_linker_args),
-        "link_files = "+str(link_files),
-        "",
-        "# Generate the extension module",
-        "ext_modules = [ Extension(mod_name, [cython_wrapper_file],",
-        "                          extra_compile_args=c_compiler_args,",
-        "                          extra_link_args=c_linker_args + link_files,",
-        "                          include_dirs = [numpy.get_include()])]",
-        ""
-        "# Compile the '.pyx' Cython file into a '.c' file, load as an extension.",
-        "extensions = cythonize(ext_modules)",
-        "dist = setup(name=mod_name, ext_modules=extensions)",
-        ""
-    ]
-
-    # Write the file to the build directory.
-    py_build_file = "build_"+mod_name+".py"
-    with open(os.path.join(build_dir,py_build_file), "w") as f:
-        f.write("\n".join(lines))
-
-    # Set the shell environment variables (setting C linker and C compiler).
-    environment = os.environ.copy()
-    environment["LDSHARED"] = " ".join([c_linker]+python_link_command)
-    if (c_compiler is not None): environment["CC"] = c_compiler
-    # Build this module by calling Python with the setup arguments to
-    # the command line. Capture output to check for success.
-    code, stdout, stderr = run(
-        [sys.executable, py_build_file, "build_ext", "--inplace"],
-        cwd=build_dir, env=environment)
-    # Raise an exception if the module failed to build.
-    if (code != 0):
-        from fmodpy.exceptions import BuildAndLinkError
-        raise(BuildAndLinkError("\n".join(stderr)))
-    print("\n".join(stdout))
-    print("="*70)
-    print("Done building module. Testing import..")
-
-    # Manipulate the path to test importing the module, make sure it
-    # will appear first in the path.
-    sys.path.insert(0, build_dir)
-    try:
-        # Try loading the newly created module (reload to ensure if it
-        # was already present it gets reloaded).
-        module = importlib.import_module(mod_name)
-        module = importlib.reload(module)
-        module_path = os.path.abspath(module.__file__)
-    except ImportError as exc:
-        from fmodpy.exceptions import LinkError
-        raise(LinkError("\n\n"+str(exc)+"\n\nUnable to successfully import module.\n Perhaps the "+
-                        "relevant compiled fortran files were not available? See message above."))
-    # Revert the system path to its original state.
-    finally: sys.path.pop(0)
-    print("Successfully imported module.")
-    if (not os.path.exists(module_path)): raise(Exception("File disappeared, fmodpy bug?"))
-    return module_path
 
 # ====================================================================
 
@@ -354,8 +293,6 @@ def autocompile_files(build_dir):
     # Get configuration parameters.
     from fmodpy.config import run, f_compiler, f_compiler_args, \
         GET_SIZE_PROG_FILE
-    # Get the list of existing object files.
-    existing_o_files = {f for f in os.listdir(build_dir) if after_dot(f) == "o"}
     # Try and compile the rest of the files (that might be fortran) in
     # the working directory in case any are needed for linking.
     should_compile = []
@@ -395,22 +332,25 @@ def autocompile_files(build_dir):
     # only files with fewest dependencies will compile first
     successes = [None]
     failed = []
-    # Continue rounds until (everything compiled) or (no success)
+    # Get the list of existing "mod" files (Fortran module definitions).
+    current_mod_files = {f for f in os.listdir(build_dir) if after_dot(f) == "mod"}
+    # Continue rounds until (everything compiled) or (no successes nor new mod files)
     print()
-    while (len(should_compile) > 0) and (len(successes) > 0):
+    while (len(should_compile) > 0) and ((len(successes) > 0) or
+                (len(current_mod_files) > len(previous_mod_files))):
         successes = []
         for f in should_compile:
             # Try to compile all files that have "f" in the extension
             print(f"Compiling '{f}'.. ")
             print(f" {' '.join([f_compiler]+f_compiler_args+[f])}")
             code, stdout, stderr = run([f_compiler]+f_compiler_args+[f],cwd=build_dir)
-            if code == 0:
+            if (code == 0):
                 successes.append(f)
-                print(" success.")
+                print("  success.")
             else:
                 # Record failed compilations.
                 if f not in failed: failed.append(f)
-                print(" failed.")
+                print("  failed.")
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
                 if len(stdout) > 0:
                     print("STANDARD OUTPUT:")
@@ -424,7 +364,9 @@ def autocompile_files(build_dir):
         for f in successes:
             should_compile.remove(f)
             if f in failed: failed.remove(f)
-
+        # Update the list of existing mod files.
+        previous_mod_files = current_mod_files
+        current_mod_files = {f for f in os.listdir(build_dir) if after_dot(f) == "mod"}
     # Log the files that failed to compile.
     for f in should_compile: print(f"Failed to compile '{f}'.")
     # Return the list of files that were successfully compiled in
@@ -460,8 +402,12 @@ def prepare_build_directory(source_dir, build_dir):
     if (os.path.abspath(source_dir) != os.path.abspath(build_dir)):
         print("Build directory is different from source directory..")
         for f in os.listdir(source_dir):
-            if ("__init__.py" in f): continue
+            # Get the full path of this source file.
             source = os.path.join(source_dir,f)
+            # Do not make links to python files (because they shouldn't be needed)
+            if (f[-3:] == ".py"): continue
+            # Do not make links to the directory itself.
+            if (source == build_dir): continue
             # Create a symbolic link to all source files in the build directory.
             destination = os.path.join(build_dir,f)
             print(" sym-linking '%s' to '%s'"%(source, destination))
@@ -518,10 +464,11 @@ def configure(*to_delete, **conf):
     # Read the existing file, if it's there.
     lines = []
     if (os.path.exists(path)):
-        with open(path, "r") as f:lines = [l.strip() for l in f.readlines()]
+        with open(path, "r") as f:
+            lines = [l.strip() for l in f.readlines()]
     # If no arguments were given, print the current
     # configuration to standard output.
-    if (len(conf) == 0):
+    if ((len(to_delete) == 0) and (len(conf) == 0)):
         import fmodpy
         from fmodpy.config import load_config
         existing = {''.join([v.strip() for v in l.split("=")[:1]]) for l in lines}
@@ -537,20 +484,19 @@ def configure(*to_delete, **conf):
             lines.append(f"  {name} = {str([conf[name]])[1:-1]}")
         # Print the output.
         print("\n".join(lines+[""]))
-        # End the function.
-        return 
-    # Overwrite the file, commenting out all the old stuff.
-    with open(path, "w") as f:
-        to_remove = {n for n in to_delete}.union(set(conf))
-        # Write the old contents, commented out.
-        for l in lines:
-            # If this variable is being overwritten, comment out the former.
-            comment_out = any(v.strip() in to_remove for v in l.split("=")[:1])
-            if comment_out: l = "# "+l
-            # Add the line to the file (so there is a history).
-            print(l, file=f)
-        # Write the new contents.
-        print("", file=f)
-        print("# ",time.ctime(), file=f)
-        for name in sorted(conf):
-            print(f"{name} = {str([conf[name]])[1:-1]}", file=f)
+    else:
+        # Overwrite the file, commenting out all the old stuff.
+        with open(path, "w") as f:
+            to_remove = {n for n in to_delete}.union(set(conf))
+            # Write the old contents, commented out.
+            for l in lines:
+                # If this variable is being overwritten, comment out the former.
+                comment_out = any(v.strip() in to_remove for v in l.split("=")[:1])
+                if comment_out: l = "# "+l
+                # Add the line to the file (so there is a history).
+                print(l, file=f)
+            # Write the new contents.
+            print("", file=f)
+            print("# ",time.ctime(), file=f)
+            for name in sorted(conf):
+                print(f"{name} = {str([conf[name]])[1:-1]}", file=f)

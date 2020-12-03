@@ -9,17 +9,46 @@ class Argument:
     name = "" # name of this argument in code
     size = "" # size in bytes (uses compiled code to evaluate)
     kind = "" # KIND setting
-    intent = "INOUT"
-    show_intent = True
+    intent = "INOUT" # INTENT setting
+    show_intent = True # if True then include INTENT in __str__
     allocatable = False # May be (re)allocated at runtime.
-    optional = False # May not be provided as input.
+    optional = False # May be excluded from input.
     save = False # Save value between executions.
     value = False # Pass by value, not by reference.
     pointer = False # Pass by pointer, not by reference.
-    dimension = None # If array, this describes the shape.
+    parameter = False # Whether this argument is a parameter (set at compile time)
+    dimension = None # If array, this list describes the shape and size.
     c_types = {} # The C-types used to declare this argument (key is self.size)
-    np_types = {} # The NumPy types used to declare this argument (key is self.size)
     default_singleton = "1" # The default value assigned to a singleton.
+
+    # ----------------------------------------------------------------
+    #                  Generating Fortran Wrapper
+
+    # Return the name of this variable that should be used locally,
+    # safe for use with RESULT values from FUNCTIONs that do not
+    # define a separate name for results.
+    # 
+    # WARNING: This function returns a string not a list, because the
+    #          size checking will have an exact 1-1 mapping of arguments.
+    def function_safe_name(self):
+        name = self.name
+        if (self.parent is not None) and (self.parent.name == self.name):
+            name += "_RESULT"
+        return name
+
+    # Return the string name of this variable for "PRESENT" checking.
+    # WARNING: This is only used by "OPTIONAL" arguments.
+    def fort_present_name(self): return self.name + "_PRESENT"
+
+    # WARNING: This function returns a string not a list, because the
+    #          Fortran call will have an exact 1-1 mapping of arguments.
+    def fort_call_name(self):
+        name = self.name
+        if (self.parent is not None) and (self.parent.name == self.name):
+            name += "_RESULT"
+        elif (self.allocatable):
+            name += "_LOCAL"
+        return name
 
     # Names of arguments that will be given to the Fortran wrapper.
     def fort_input(self):
@@ -83,34 +112,8 @@ class Argument:
         # Return the lines of declaration.
         return lines
 
-    # Return the name of this variable that should be used locally,
-    # safe for use with RESULT values from FUNCTIONs that do not
-    # define a separate name for results.
-    # 
-    # WARNING: This function returns a string not a list, because the
-    #          size checking will have an exact 1-1 mapping of arguments.
-    def function_safe_name(self):
-        name = self.name
-        if (self.parent is not None) and (self.parent.name == self.name):
-            name += "_RESULT"
-        return name
-
     # Lines of Fortran code that must be executed before the call.
     def fort_prepare(self): return []
-
-    # Return the string name of this variable for "PRESENT" checking.
-    # WARNING: This is only used by "OPTIONAL" arguments.
-    def fort_present_name(self): return self.name + "_PRESENT"
-
-    # WARNING: This function returns a string not a list, because the
-    #          Fortran call will have an exact 1-1 mapping of arguments.
-    def fort_call_name(self):
-        name = self.name
-        if (self.parent is not None) and (self.parent.name == self.name):
-            name += "_RESULT"
-        elif (self.allocatable):
-            name += "_LOCAL"
-        return name
 
     # Lines of Fortran code that must be executed after the call.
     def fort_after(self, present=True):
@@ -129,32 +132,8 @@ class Argument:
         # Return the list of lines.
         return lines
 
-    # The names of arguments as described in a C representation, this 
-    # will perfectly match the inputs of the Fortran wrapper code.
-    def c_input(self):
-        names = []
-        if (self.optional): names += ["bint* "+self.name.lower()+"_present"]
-        # Add dimension size arguments.
-        if self.dimension is not None:
-            for i in range(len(self.dimension)):
-                names += ["int* "+self.name.lower()+f"_dim_{i+1}"]
-        # Determine the C type.
-        if (self.size in self.c_types):
-            c_type = self.c_types[self.size]
-        else:
-            from fmodpy.config import fmodpy_print as print
-            print(f"ERROR: unknown size '{self.size}'")
-            raise(NotImplementedError)
-        # Determine the handling of pointers if allocatable.
-        if (not self.allocatable):
-            names += [f"{self.c_types[self.size]}* {self.name.lower()}"]
-        elif (not self._is_input()):
-            names += [f"{self.c_types[self.size]}** {self.name.lower()}"]
-        else:
-            from fmodpy.config import fmodpy_print as print
-            print("Currently fmodpy does not support ALLOCATABLE inputs.")
-            raise(NotImplementedError)
-        return names
+    # ----------------------------------------------------------------
+    #                  Generating Python Wrapper
 
     # The names of arguments as seen in the Python function declaration.
     def py_input(self):
@@ -172,20 +151,7 @@ class Argument:
         py_name = self.name.lower()
         # Get the C type.
         if (self.size in self.c_types): c_type = self.c_types[self.size]
-        else:                           raise(NotImplementedError)
-        # Get the NumPy type.
-        if (self.size in self.np_types): np_type = self.np_types[self.size]
-        else:                            raise(NotImplementedError)
-        # Define the dimension size variables if appropriate.
-        if (self.dimension is not None):
-            for i in range(len(self.dimension)):
-                if (self._is_optional() or self.allocatable):
-                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int(0)")
-                elif (self._allowed_input()):
-                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
-        else:
-            from fmodpy.config import fmodpy_print as print
-            print(f"Argument '{py_name}' had no dimension attribute..")
+        else: raise(NotImplementedError(f"\n\nUnrecognized size '{self.size}' for argument '{self.name}', no known corresponding C type."))
         # If this is literally an optional, a boolean is required.
         if self.optional:
             lines.append(f"{py_name}_present = ctypes.c_bool(True)")
@@ -197,50 +163,77 @@ class Argument:
                 lines.append(f"    {py_name}_present = ctypes.c_bool(False)")
             # If this is a singleton, set its default value.
             if (self.dimension is None):
-                lines.append(f"    {py_name} = {self.default_singleton}")
-                lines.append(f"{py_name}_local = {c_type}({py_name})")
+                lines.append(f"    {py_name} = {c_type}()")
             # This has a dimension AND is allocatable.
             elif (self.allocatable):
-                lines.append(f"{py_name}_local = ctypes.c_void_p()")
-                if (self._is_input()):
-                    lines.append(f"if ({py_name}_present):")
-                    lines.append(f"    {py_name}_local = numpy.asarray({py_name}, dtype={c_type}, order='F')")
-            # This has a dimension, but is NOT allocatable.
-            else:
-                # Either initialize with the known size, or with size "1".
+                lines.append(f"    {py_name} = ctypes.c_void_p()")
+                if (self.optional):
+                    lines.append(f"elif (type({py_name}) == bool) and ({py_name}):")
+                default_shape = ','.join('1'*len(self.dimension))
+                # If the size is known, then we can initialize this optional array to pass it in.
                 if (self._known_size()):
                     default_shape = ', '.join(self._default_size()).lower()
-                else: default_shape = ','.join('1'*len(self.dimension))
+                # Create lines for initializing the default values.
+                if (self._is_input()):
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
+                else:
+                    lines.append(f"    {py_name} = ctypes.c_void_p()")
+            # This has a dimension, but is NOT allocatable.
+            else:
+                default_shape = ','.join('1'*len(self.dimension))
                 # If this is optional (not present shape is always 1).
                 if (self.optional):
-                    not_present_shape = ','.join('1'*len(self.dimension))
-                    lines.append(f"    {py_name} = numpy.zeros(shape=({not_present_shape}), dtype={c_type}, order='F')")
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
                     lines.append(f"elif (type({py_name}) == bool) and ({py_name}):")
+                # If the size is known, then we can initialize this optional array to pass it in.
+                if (self._known_size()):
+                    default_shape = ', '.join(self._default_size()).lower()
                 # Create lines for initializing the default values.
                 lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
-                for i in range(len(self.dimension)):
-                    lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
-                # Check for Fortran-continuity if multi dimensional.
-                lines += [f"elif (not numpy.asarray({py_name}).flags.f_contiguous):",
-                          f"    import warnings",
-                          f"    warnings.warn(\"The numpy array provided for argument '{py_name}' was not f_contiguous. Automatically constructing a copy.\")",
-                          f"    {py_name} = numpy.asarray({py_name}, order='F')",
-                          f"else:"]
-                for i in range(len(self.dimension)):
-                    lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
-                lines.append(f"{py_name}_local = {py_name}")
+        # Convert appropriate array-inputs into Fortran compatible arrays.
+        if ((self.dimension is not None) and (self._is_input())):
+            # Check for Fortran-continuity and data type of array inputs.
+            p, s = "", "" # <- prefix, spaces
+            if self._is_optional(): p, s = f"el", "  "
+            lines += [f"{p}if ((not issubclass(type({py_name}), numpy.ndarray)) or",
+                      f"{s}    (not numpy.asarray({py_name}).flags.f_contiguous) or",
+                      f"{s}    (not ({py_name}.dtype == numpy.dtype({c_type})))):",
+                       "    import warnings",
+                      f"    warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{c_type}' (or equivalent). Automatically converting (probably creating a full copy).\")",
+                      f"    {py_name} = numpy.asarray({py_name}, dtype={c_type}, order='F')",]
         # If this is an output-only allocatable, declare a local pointer.
         elif ((not self.optional) and self._is_output() and self.allocatable):
-            lines.append(f"{py_name}_local = ctypes.c_void_p()")
+            lines.append(f"{py_name} = ctypes.c_void_p()")
         # Otherwise this an output immutable type, declare it locally.
         elif (not self._allowed_input()):
             lines.append(f"{py_name} = {c_type}()")
-        # This is an input.
-        elif (self._is_input()):
-            if (self.dimension is None):
-                lines.append(f"{py_name} = {c_type}({py_name})")
+        # This is a singleton input, convert to appropraite C type.
+        elif (self._is_input() and (self.dimension is None)):
+            lines.append(f"if (type({py_name}) is not {c_type}): {py_name} = {c_type}({py_name})")
+        # Define the dimension size variables if appropriate.
+        if (self.dimension is not None):
+            # If this object is allowed as input..
+            if (self._allowed_input()):
+                # This is optional, so we need to check what to do with dimensions.
+                if ((self.optional) and (self._is_input())):
+                    lines.append(f"if ({py_name}_present):")
+                    for i in range(len(self.dimension)):
+                        lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
+                    lines.append("else:")
+                    for i in range(len(self.dimension)):
+                        lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int()")
+                # This is not input, but it is optionally allowed to be given.
+                elif (self.optional):
+                    for i in range(len(self.dimension)):
+                        lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int()")
+                # This is not optional, so it is declared at this point, get the dimensions.
+                else:
+                    for i in range(len(self.dimension)):
+                        lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
+            # This array is output, initialize dimension memory locations.
             else:
-                lines.append(f"{py_name} = numpy.asarray({py_name}, dtype={c_type}, order='F')")
+                for i in range(len(self.dimension)):
+                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int()")
         # Return lines of declaration code.
         return lines
 
@@ -256,8 +249,6 @@ class Argument:
                 names.append(f"ctypes.byref({py_name}_dim_{i+1})")
         # Append the actual name of this variable.
         names.append(py_name)
-        # If this variable is optional, it has a local C declaration.
-        if (self.allocatable or self._is_optional()): names[-1] += "_local"
         # If this is a memory view, then access the first element
         # (start of block of memory).
         if ((self.dimension is not None) and (not self.allocatable)):
@@ -270,14 +261,10 @@ class Argument:
     # The lines of Python code that must be executed after the Fortran call.
     def py_after(self):
         lines = []
-        py_name = self.name.lower()
         if self.allocatable and self._is_output():
+            py_name = self.name.lower()
             # This must be an array argument and it must be 'INTENT(OUT)'.
             if (self.dimension is None): raise(NotImplementedError)
-            # Get the size of the numpy variable.
-            if (self.size in self.np_types):
-                np_size = f"numpy.NPY_{self.np_types[self.size].upper()}"
-            else: raise(NotImplementedError)
             # Get the pointer to the first index.
             local_dims = [f"{py_name}_dim_{i+1}.value" for i in range(len(self.dimension))]
             # Compute the size of the (flattened) array.
@@ -288,9 +275,8 @@ class Argument:
                 lines += [f"if ({py_name}_present):"]
                 # Get flat array pointer and reshape by the dimensions
                 # reversed, then transpose (f_contiguous).
-                lines += [f"    {py_name}_local = ctypes.cast({py_name}_local, ctypes.POINTER({c_type}*{py_name}_size))"]
-                lines += [f"    {py_name} = numpy.array({py_name}_local.contents, copy=False)"]
-                # If this is a tensor, then reshape it (in C style, row major).
+                lines += [f"    {py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({c_type}*{py_name}_size)).contents, copy=False)"]
+                # If this is a tensor, then reshape it (from C style, row major) to Fortran style.
                 if (len(self.dimension) > 1):
                     lines += [f"    {py_name} = {py_name}.reshape({shape}).T"]
                 # Otherwise, (if not present) this output is None.
@@ -298,9 +284,8 @@ class Argument:
             else:
                 # Get flat array pointer and reshape by the dimensions
                 # reversed, then transpose (f_contiguous).
-                lines += [f"{py_name}_local = ctypes.cast({py_name}_local, ctypes.POINTER({c_type}*{py_name}_size))"]
-                lines += [f"{py_name} = numpy.array({py_name}_local.contents, copy=False)"]
-                # If this is a tensor, then reshape it (in C style, row major).
+                lines += [f"{py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({c_type}*{py_name}_size)).contents, copy=False)"]
+                # If this is a tensor, then reshape it (from C style, row major) to Fortran style.
                 if (len(self.dimension) > 1):
                     lines += [f"{py_name} = {py_name}.reshape({shape}).T"]
         # Return all lines.
@@ -312,12 +297,9 @@ class Argument:
         if (self._is_output()):
             # Transform array memory views back into NumPy arrays.
             is_pointer = (self._is_output() and self.allocatable)
-            if (is_pointer) : name_ext = ""
-            elif (self._is_optional() or self.allocatable): name_ext = "_local"
-            else: name_ext = ""
             # Add this argument to the output.
             py_name = self.name.lower()
-            value = f"{py_name}{name_ext}"
+            value = py_name
             # Retrieve the Python "value" of the C object if appropriate.
             if (self.dimension is None): value += ".value"
             # Return None for missing optional returns.
@@ -325,6 +307,198 @@ class Argument:
             else:             names.append(f"{value}")
         # Return the processed name.
         return names
+
+    # ----------------------------------------------------------------
+    #                    Module Attribute Access
+
+    # Define a 'getter' function in Python for a public module attribute.
+    def py_getter(self):
+        py_name = self.name.lower()
+        call_args = []
+        lines = [f'def get_{py_name}(self):']
+        # If this is not in a MODULE, then that was unexpected.
+        if ((self.parent == None) or (self.parent.type != "MODULE")):
+            raise(NotImplementedError)
+        # Get the c_type of this attribute.
+        if (self.size in self.c_types):
+            c_type = self.c_types[self.size]
+        else: raise(NotImplementedError)
+        # If this module attribute is allocatable, we might need to return None.
+        if (self.allocatable):
+            call_args.append(f'ctypes.byref({py_name}_allocated)')
+            lines.append(f'    {py_name}_allocated = ctypes.c_bool(False)')
+        # Define the dimension size variables if appropriate.
+        if (self.dimension is not None):
+            for i in range(len(self.dimension)):
+                lines.append(f'    {py_name}_dim_{i+1} = ctypes.c_int()')
+                call_args.append(f'ctypes.byref({py_name}_dim_{i+1})')
+                # Define the actual attribute holder itself.
+        if (self.allocatable or (self.dimension is not None)):
+            lines += [f'    {py_name} = ctypes.c_void_p()']
+        else:
+            lines += [f'    {py_name} = {c_type}()']
+        call_args.append(f'ctypes.byref({py_name})')
+        # Make the call to the Fortran wrapped function for getting.
+        module_name = self.parent.name.lower()
+        lines += [f'    clib.{module_name}_get_{py_name}({", ".join(call_args)})']
+        # If this allocatable is not allocated, return "None".
+        if (self.allocatable):
+            lines.append(f'    if (not {py_name}_allocated.value): return None')
+        # If this is an array, retreive its value from a pointer.
+        if (self.dimension is not None):
+            # Get the pointer to the first index.
+            local_dims = [f"{py_name}_dim_{i+1}.value" for i in range(len(self.dimension))]
+            # Compute the size of the (flattened) array.
+            lines.append(f"    {py_name}_size = ({') * ('.join(local_dims)})")
+            # Get flat array pointer and reshape by the dimensions
+            # reversed, then transpose (f_contiguous).
+            lines.append(f"    {py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({c_type}*{py_name}_size)).contents, copy=False)")
+            # If this is a tensor, then reshape it to be a tensor again.
+            if (len(self.dimension) > 1):
+                shape = ','.join(local_dims[::-1])
+                lines += [f"    {py_name} = {py_name}.reshape({shape}).T"]
+            # Return the value.
+            lines += [f'    return {py_name}']
+        else:
+            lines += [f'    return {py_name}.value']
+        # Return the lines that compose this "getter".
+        return lines
+
+    # Define a 'setter' function in Python for a public module attribute.
+    def py_setter(self):
+        py_name = self.name.lower()
+        lines = [f'def set_{py_name}(self, {py_name}):']
+        if self.parameter:
+            lines += ["    raise(NotImplementedError('Module attributes with PARAMETER status cannot be set.'))"]
+            return lines
+        call_args = []
+        # If this is not in a MODULE, then that was unexpected.
+        if ((self.parent == None) or (self.parent.type != "MODULE")):
+            raise(NotImplementedError)
+        # Get the c_type of this attribute.
+        if (self.size in self.c_types):
+            c_type = self.c_types[self.size]
+        else: raise(NotImplementedError)
+        # Get the size if there is a dimension.
+        if (self.dimension is not None):
+            lines += [f"    if ((not issubclass(type({py_name}), numpy.ndarray)) or",
+                      f"        (not numpy.asarray({py_name}).flags.f_contiguous) or",
+                      f"        (not ({py_name}.dtype == numpy.dtype({c_type})))):",
+                       "        import warnings",
+                      f"        warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{c_type}' (or equivalent). Automatically converting (probably creating a full copy).\")",
+                      f"        {py_name} = numpy.asarray({py_name}, dtype={c_type}, order='F')",]
+            # Store all the sizes.
+            for i in range(len(self.dimension)):
+                dim_name = f'{py_name}_dim_{i+1}'
+                lines.append(f'    {dim_name} = ctypes.c_int({py_name}.shape[{i}])')
+                call_args.append(f'ctypes.byref({dim_name})')
+            # Call passing in all arguments (might include sizes).
+            call_args.append(f'ctypes.c_void_p({py_name}.ctypes.data)')
+        else:
+            # Initialize correct c_type version of value.
+            lines.append(f'    {py_name} = {c_type}({py_name})')
+            # Call passing in all arguments (might include sizes).
+            call_args.append(f'ctypes.byref({py_name})')
+        module_name = self.parent.name.lower()
+        lines += [f'    clib.{module_name}_set_{py_name}({", ".join(call_args)})']
+        return lines
+
+    # Define the 'property' referencing the correct getter and setter.
+    def py_property(self):
+        py_name = self.name.lower()
+        module_name = self.parent.name.lower()
+        getter_name = f"get_{py_name}"
+        setter_name = f"set_{py_name}"
+        return [f'{py_name} = property({getter_name}, {setter_name})']
+
+    # Define the FORTRAN BIND(C) subroutine for retreiving the value
+    # of this module attribute.
+    def fort_getter(self):
+        # Add extra arguments for the dimension sizes.
+        args = []
+        decs = [f"USE {self.parent.name}, ONLY: {self.name}"] # declarations
+        lines = []
+        # Create a local copy.
+        temp = self.copy()
+        temp.name += "_LOCAL"
+        # Get allocatable present input.
+        if (self.allocatable):
+            args.append(f'{self.name}_ALLOCATED')
+            decs.append(f'LOGICAL, INTENT(OUT) :: {self.name}_ALLOCATED')
+            lines += [f'{self.name}_ALLOCATED = ALLOCATED({self.name})',
+                      f'IF (.NOT. {self.name}_ALLOCATED) RETURN']
+
+        # Get all dimension size inputs.
+        if (self.dimension is not None):
+            temp.type = "INTEGER"
+            temp.kind = "INT64"
+            temp.dimension = None
+            temp.allocatable = False
+            decs.insert(0,"USE ISO_FORTRAN_ENV, ONLY: INT64")
+            for i in range(len(self.dimension)):
+                args.append(f"{self.name}_DIM_{i+1}")
+                decs.append(f"INTEGER, INTENT(OUT) :: {self.name}_DIM_{i+1}")
+                lines.append(f"{self.name}_DIM_{i+1} = SIZE({self.name}, {i+1})")
+        # Disable "parameter" status for the local copy.
+        if self.parameter: temp.parameter = False
+        # Add argument for the actual variable.
+        args.append(f"{temp.name}")
+        decs += [str(temp)]
+        # Insert the declarations before the lines.
+        lines = decs + lines
+        # Do the assignment.
+        if (self.dimension is None): lines.append(f"{temp.name} = {self.name}")
+        else:                        lines.append(f"{temp.name} = LOC({self.name}(1))")
+        # Add indentation to all lints.
+        lines = ["  "+l for l in lines]
+        # Add the subroutine line (with all arguments).
+        lines.insert(0, f"SUBROUTINE {self.parent.name}_GET_{self.name}({', '.join(args)}) BIND(C)")
+        # Add the end of the subroutine declaration line.
+        lines.append(f"END SUBROUTINE {self.parent.name}_GET_{self.name}")
+        return lines
+
+    # Define the FORTRAN BIND(C) subroutine for setting the value
+    # of this module attribute.
+    def fort_setter(self):
+        # If this is a parameter, it cannot be set.
+        if (self.parameter): return []
+        # Add extra arguments for the dimension sizes.
+        args = []
+        lines = []
+        # Get all dimension size inputs.
+        temp = self.copy()
+        temp.name += "_LOCAL"
+        temp.dimension = []
+        temp.allocatable = False
+        if (self.dimension is not None):
+            for i in range(len(self.dimension)):
+                args.append(f"{self.name}_DIM_{i+1}")
+                lines.append(f"INTEGER, INTENT(IN) :: {self.name}_DIM_{i+1}")
+                temp.dimension.append(args[-1])
+        # Add argument for the actual variable.
+        args.append(temp.name)
+        # Insert the declaration for the local (input / set) value.
+        lines += [str(temp)]
+        # Get allocatable present input.
+        if (self.allocatable):
+            lines += [f'IF (ALLOCATED({self.name})) THEN',
+                      f'  DEALLOCATE({self.name})',
+                       'END IF']
+            shape_str = ','.join([f'1:{name}' for name in temp.dimension])
+            lines += [f'ALLOCATE({self.name}({shape_str}))']
+        lines += [f"{self.name} = {temp.name}"]
+        # Add indentation to all lints.
+        lines = ["  "+l for l in lines]
+        # Add the subroutine line (with all arguments).
+        lines.insert(0, f"SUBROUTINE {self.parent.name}_SET_{self.name}({', '.join(args)}) BIND(C)")
+        lines.insert(1, f"  USE {self.parent.name}, ONLY: {self.name}")
+        # Add the end of the subroutine declaration line.
+        lines.append(f"END SUBROUTINE {self.parent.name}_SET_{self.name}")
+        return lines
+
+
+    # ----------------------------------------------------------------
+    #                    Wrapper Utilities
 
     # Return True if this variable has INTENT(IN).
     def _is_input(self): return ("IN" in self.intent)
@@ -394,16 +568,36 @@ class Argument:
                     name = argument[:argument.index(",")]
                     dim = argument[argument.index(",")+1:]
                     dim = str(int(dim) - 1)
-                    # TODO: Not sure why this was a try-except, need a test!
-                    # try:    
-                    # except: dim += "-1"
                     func_replacement = f"{name}.shape[{dim}]"
                 # Replace float division with integer division in python.
                 size = before_call + func_replacement + after_call
             # Append this NumPy size.
             sizes.append(size)
+        # fix any module attribute names to have "self." before them
+        if (hasattr(self.parent, "parent") and
+            hasattr(self.parent.parent, "type") and
+            (self.parent.parent.type == "MODULE")):
+            # create a temporary function that says whether or
+            #  not a character could belong to a python name
+            is_not_py_char = lambda c: not (c.isalpha() or c.isdigit() or (c == '_'))
+            # cycle the internal attribute of the parent module that
+            #  might be accessible here
+            for arg in self.parent.parent.arguments:
+                name = arg.name.lower()
+                # cycle all size entries to check their contents
+                for i in range(len(sizes)):
+                    # if the module attribute is used and it is not just
+                    #  a substring match, then make the replacement
+                    s = sizes[i]
+                    if (name in s):
+                        j = s.index(name)
+                        if ((j == 0) or is_not_py_char(s[j-1])):
+                            sizes[i] = s.replace(name, "self."+name)
         # Return the list of sizes.
         return sizes
+
+    # ----------------------------------------------------------------
+    #                      Generic Methods
 
     # Generate a copy of this argument and return it.
     def copy(self):
@@ -417,6 +611,10 @@ class Argument:
         arg.show_intent = self.show_intent
         arg.allocatable = self.allocatable
         arg.optional = self.optional
+        arg.save = self.save
+        arg.value = self.value
+        arg.pointer = self.pointer
+        arg.parameter = self.parameter
         if (self.dimension is not None):
             arg.dimension = self.dimension.copy()
         return arg
@@ -452,9 +650,8 @@ class Argument:
             if (line[0] == "ALLOCATABLE"):
                 line.pop(0)
                 self.allocatable = True
-                continue
             # Read DIMENSION
-            if (line[0] == "DIMENSION"):
+            elif (line[0] == "DIMENSION"):
                 group, line = pop_group(line[1:])
                 if (len(group) == 0): raise(NotImplementedError)
                 # Break up dimensions by commas, allow nested parentheses.
@@ -468,42 +665,38 @@ class Argument:
                     if (next_value == "("): num_open += 1
                     if (next_value == ")"): num_open -= 1
                 # Done processing dimension.
-                continue
             # Read INTENT
-            if (line[0] == "INTENT"):
+            elif (line[0] == "INTENT"):
                 group, line = pop_group(line[1:])
                 if (len(group) == 0): raise(NotImplementedError)
                 self.intent = "".join(group)
-                continue
             # Read OPTIONAL
-            if (line[0] == "OPTIONAL"):
+            elif (line[0] == "OPTIONAL"):
                 line.pop(0)
                 self.optional = True
-                continue            
             # Read SAVE
-            if (line[0] == "SAVE"):
+            elif (line[0] == "SAVE"):
                 line.pop(0)
                 self.save = True
-                continue
             # Read PARAMETER (discard this)
-            if (line[0] == "PARAMETER"):
+            elif (line[0] == "PARAMETER"):
                 line.pop(0)
-                continue
+                self.parameter = True
             # Read EXTERNAL (discard this)
-            if (line[0] == "EXTERNAL"): 
+            elif (line[0] == "EXTERNAL"): 
                 line.pop(0)
-                continue
+                import warnings
+                warnings.warn("fmodpy.parsing.argument: Ignoring 'EXTERNAL' status of argument.")
             # Otherwise, this is an unrecognized argument.
-            from fmodpy.config import fmodpy_print as print
-            print()
-            print(f"Unrecognized part of Argument '{line[0]}'.\n")
-            raise(NotImplementedError)
+            else:
+                raise(NotImplementedError(f"\n\nUnrecognized part of Argument '{line[0]}'.\n"))
 
     # Print the Fortran string declaration of this argument.
     def __str__(self):
         out = f"{self.type}"
         if (len(self.kind) > 0): out += f"(KIND={self.kind})"
         if (self.show_intent and (len(self.intent) > 0)): out += f", INTENT({self.intent})"
+        if (self.parameter): out += ", PARAMETER"
         if (self.optional): out += f", OPTIONAL"
         if (self.allocatable): out += f", ALLOCATABLE"
         if (self.save): out += f", SAVE"

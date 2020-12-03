@@ -49,6 +49,7 @@ def run_tests():
     from fmodpy.test.int32 import test as test_int32
     from fmodpy.test.int64 import test as test_int64
     from fmodpy.test.logical import test as test_logical
+    from fmodpy.test.module import test as test_module
 
     # Run all of the tests.
     test_real32()
@@ -57,20 +58,28 @@ def run_tests():
     test_int32()
     test_int64()
     test_logical()
+    test_module()
 
 
 if __name__ == "__main__":
+    # /Users/thomaslux/Library/Python/3.7/bin/pprofile 
+    # 
     # Activate a code coverage module.
-    import coverage, os
-    this_dir = os.path.dirname(os.path.abspath(__file__))
-    module_dir = os.path.dirname(this_dir)
-    omitted = [this_dir] + [f for f in os.listdir(this_dir)]
-    cov = coverage.Coverage(source=[module_dir], omit=[this_dir])
-    cov.start()
+    # import coverage, os
+    # this_dir = os.path.dirname(os.path.abspath(__file__))
+    # module_dir = os.path.dirname(this_dir)
+    # omitted = ([this_dir] + [os.path.join(this_dir,f) for f in os.listdir(this_dir)]
+    #            + [os.path.join(this_dir,f)+"*" for f in os.listdir(this_dir)
+    #               if os.path.isdir(os.path.join(this_dir,f))])
+    # print("Omitted:")
+    # print(omitted)
+    # cov = coverage.Coverage(source=[module_dir], omit=omitted)
+    # cov.start()
 
     # Run the tests on `fmodpy`.
     run_tests()
 
+    exit()
     print()
     print("Generating code coverage report..", flush=True)
     # Save data from the coverage tracking (for report).

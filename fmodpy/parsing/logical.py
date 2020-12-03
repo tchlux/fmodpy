@@ -3,7 +3,6 @@ from .argument import Argument
 class Logical(Argument):
     type = "LOGICAL"
     c_types = {"4":"ctypes.c_bool"}
-    np_types = {"4":"int32"} # only used for array initialization
     default_singleton = 1
 
     # Add a warning that 

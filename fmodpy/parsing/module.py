@@ -1,6 +1,7 @@
 from .code import Code
-from . import parse_use, parse_implicit, parse_argument, \
-    parse_interface, parse_type, parse_subroutine, parse_function
+from . import parse_use, parse_implicit, parse_public, parse_private, \
+    parse_argument, parse_interface, parse_type, parse_subroutine, \
+    parse_function
 from .subroutine import Subroutine
 from .function import Function
 
@@ -8,11 +9,14 @@ from .function import Function
 # --------------------------------------------------------------------
 class Module(Code):
     type = "MODULE"
+    status = "PUBLIC"
     can_contain = [(parse_use, "uses"),
                    (parse_implicit, "implicit_none"),
-                   (parse_argument, "arguments"),
-                   (parse_interface, "interfaces"),
+                   (parse_public, "public"),
+                   (parse_private, "private"),
                    (parse_type, "types"),
+                   (parse_interface, "interfaces"),
+                   (parse_argument, "arguments"),
                    (parse_subroutine, "subroutines"),
                    (parse_function, "functions"),
     ]
@@ -20,146 +24,154 @@ class Module(Code):
 
     # Produce a string representation of this code object.
     def __str__(self):
-        out = f"{self.starts_with} {self.name}\n"
+        out = f"{self.type} {self.name}\n"
         # Add documentation.
         if (len(self.docs.strip()) > 0):
             doc_lines = self.docs.strip().split("\n")
             for line in doc_lines: out += f"  {line}\n"
-        # Add the "USE" line.
-        for m in sorted(self.uses):
-            if (len(self.uses[m]) == 0): out += "  USE {m}\n"
-            else: out += f"  USE {m}, ONLY: {', '.join(self.uses[m])}\n"
-        # Add all internal functions and subroutines (in the future
-        # arguments, types, and interfaces too).
-        if (len(self.contains) > 0): out += "\nCONTAINS\n"
-        for code in self.contains:
-            summary = str(code).strip().split("\n")
-            out += "\n"
-            for line in summary:
+        # Add used modules.
+        for line in sorted(self.uses): out += "  "+line+"\n"
+        for line in sorted(self.implicit_none): out += "  "+line+"\n"
+        # Add types
+        if (len(self.types) > 0): out += "\n"
+        for t in self.types:
+            for line in str(t).split("\n"):
+                out += "  "+line+"\n"
+        # Add interfaces.
+        if (len(self.interfaces) > 0): out += "\n"
+        for i in self.interfaces:
+            for line in str(i).split("\n"):
+                out += "  "+line+"\n"
+        # Only add the space before arguments if types or
+        # interfaces came before them.
+        if ((max(len(self.interfaces),len(self.types)) > 0) and
+            (len(self.arguments) > 0)): out += "\n"
+        # Add arguments.
+        for a in self.arguments:
+            if (a.type == "PROCEDURE"): continue
+            out += f"  {a}\n"
+        # Only add the space before subroutines if arguments came before.
+        if (len(self.arguments) > 0): out += "\n"
+        # Add subroutines.
+        for obj in self.subroutines:
+            for line in str(obj).split("\n"):
                 out += f"  {line}\n"
-        out += f"\nEND {self.starts_with} {self.name}"
+            out += "\n"
+        # Add functions.
+        for obj in self.functions:
+            for line in str(obj).split("\n"):
+                out += f"  {line}\n"
+            out += "\n"
+        # Remove the extra new line before ending the module.
+        out = out[:-1]
+        # End the module.
+        out += f"END {self.type} {self.name}\n"
         return out
 
     # Generate Fortran wrapper code that can call this Module's source code.
     def generate_fortran(self):
-        lines = [f"{self.starts_with} C_{self.name}"]
+        # Generate the input signature.
+        fortran_arguments = []
+        for arg in self.arguments: fortran_arguments += arg.fort_input()
+        lines = ['',f'{self.type} C_{self.name}']
         # Add the "USE" line.
-        for m in sorted(self.uses):
-            if (len(self.uses[m]) == 0): lines += ["  USE {m}"]
-            else: lines += [f"  USE {m}, ONLY: {', '.join(self.uses[m])}"]
-        # Add the "USE" line for the source module.
-        lines += [f"  USE {self.name}",
-                  "  ! All variables should be defined, using no implicits.",
-                  "  IMPLICIT NONE"]
-        # Add custom types
-        # Add interfaces (for PROCEDURE declarations).
-        lines += ['','CONTAINS']
-        # Add all the contained subroutines and functions.
-        for code in self.contains:
-            lines += ['  '+l for l in code.generate_fortran()]
-        lines += [f"END {self.starts_with} c_{self.name}"]
-        return lines
+        lines += self.uses
+        if any((a.allocatable and a._is_output()) for a in self.arguments):
+            lines += ['  USE ISO_FORTRAN_ENV, ONLY: INT64']
+        # Enforce no implicit typing (within this code).
+        lines += [f'  IMPLICIT NONE']
+        lines += ['']
 
-    # Evaluate the sizes of all arguments to the the funnctions and
-    # subroutines for this module.
-    def eval_sizes(self, build_dir):
-        for code in self.contains: code.eval_sizes(build_dir)
+        # Declare all interfaces.
+        for i in self.interfaces:
+            if (len(i.subroutines) + len(i.functions) > 0):
+                lines += ['']
+                lines += ['  '+l for l in str(i).split("\n")]
+
+        lines += ['']
+        lines += ['CONTAINS']
+        lines += ['']
+
+        # Define all "getter" and "setter" subroutines for accessing
+        # internal module (PUBLIC) attributes.
+        for arg in self.arguments:
+            lines += ['',f'  ! Getter and setter for {arg.name}.']
+            lines += ['  '+l for l in arg.fort_getter()]
+            lines += ['  '+l for l in arg.fort_setter()]
+
+        # Declare all subroutines and functions.
+        for code in self.subroutines + self.functions:
+            lines += ['']
+            lines += ['  ' + l for l in code.generate_fortran()]
+
+        # Add the END line.
+        lines += [f"END {self.type} C_{self.name}",'']
+
+        return lines
 
     # Generate Python code.
     def generate_python(self):
         # Add access points for the contained subroutines and functions.
-        lines = []
-        for code in self.contains: lines += code.generate_python() + ['']
+        lines = [ '',
+                 f'class {self.name.lower()}:',
+                 f"    '''{self.docs}'''"]
+        # Generate getter and setter for arguments.
+        for arg in self.arguments:
+            py_name = arg.name.lower()
+            lines += ['']
+            lines += [f"    # Declare '{py_name}'"]
+            # Declare the "getter" for this module variable.
+            lines += [ "    "+l for l in arg.py_getter() ]
+            # Declare the "setter" for this module variable.
+            lines += [ "    "+l for l in arg.py_setter() ]
+            # Declare this as a property that has a getter and a setter.
+            lines += [ "    "+l for l in arg.py_property() ]
+        # Generate static methods for all internal routines.
+        for code in self.subroutines + self.functions:
+            lines += ['']
+            lines += ['    '+l for l in code.generate_python()]
+        # Replace the class definition with a single instance of the class.
+        lines += [ "",
+                  f"{self.name.lower()} = {self.name.lower()}()"]
         return lines
 
     # Given a list of lines (of a source Fortran file), parse out this
     # module (assuming the first line is the first line *inside* of
     # this module).
     def parse(self, list_of_lines):
-        raise(NotImplementedError)
-        known_public = []
-        known_private = []
-        default_list = known_public
-        # Check for documentation.
-        while (len(list_of_lines) > 0) and (list_of_lines[0].strip()[:1] == "!"):
-            self.docs += "\n" + list_of_lines.pop(0)
-        self.docs = self.docs.strip()
-        comments = ""
-        # Loop until the end of this module.
-        while True:
-            # Raise error if the code ends unexpectedly.
-            if (len(list_of_lines) == 0):
-                from fmodpy.exceptions import FortranError
-                raise(FortranError("File ended without observing 'END {self.starts_with}'."))
-            # Read the next line.
-            line = list_of_lines[0].strip().split()
-            # Cycle empty lines.
-            if (len(line) == 0):
-                list_of_lines.pop(0)
-                comments = ""
-                continue
-            # Check if this is a comment (line should not be empty).
-            if (line[0] == "!"):
-                comments += "\n" + list_of_lines.pop(0)
-                continue
-            # Check for END of this module.
-            if (line[0] == "END"):
-                list_of_lines.pop(0)
-                # **** WHILE LOOP TERMINATION ****
-                if parse_end(line, self.starts_with, self.name): break
-                continue
-            # Check for a USE statement.
-            if (line[0] == "USE"):
-                list_of_lines.pop(0)
-                module, names = parse_use(line)
-                self.uses[module] = self.uses.get(module,[]) + names
-                continue
-            # Check for PRIVATE declarations.
-            if (line[0] == "PRIVATE"):
-                list_of_lines.pop(0)
-                if ":" in line:
-                    # Grab the list of names after the "::".
-                    line = line[3:]
-                    while ("," in line): line.remove(",")
-                    if (len(line) == 0):
-                        from fmodpy.exceptions import FortranError
-                        raise(FortranError("Expected 'PRIVATE ::' followed by comma separated names, but got '{list_of_lines[0]}'."))
-                    # Some specific subroutines and functions are declared private.
-                    known_private += line
-                else:
-                    # If the module is declared private then change the default list.
-                    default_list = known_private
-                continue
-            # Check for PRIVATE declarations.
-            if (line[0] == "PUBLIC"):
-                list_of_lines.pop(0)
-                if ":" in line:
-                    # Grab the list of names after the "::".
-                    line = line[3:]
-                    while ("," in line): line.remove(",")
-                    if (len(line) == 0):
-                        from fmodpy.exceptions import FortranError
-                        raise(FortranError("Expected 'PUBLIC ::' followed by comma separated names, but got 'list_of_lines[0]'."))
-                    # Some specific subroutines and functions are declared private.
-                    known_public += line
-                else:
-                    # If the module is declared private then change the default list.
-                    default_list = known_public
-                continue
-            # Check for SUBROUTINE declaration.
-            instance = Subroutine(list_of_lines, comments, parent=self)
-            if (instance.lines > 0):
-                if instance.name not in known_private:
-                    self.contains.append( instance )
-                comments = ""
-                continue
-            # Check for FUNCTION declaration.
-            instance = Function(list_of_lines, comments, parent=self)
-            if (instance.lines > 0):
-                self.contains.append( instance )
-                comments = ""
-                continue
-            # Nothing match, 
-            line = list_of_lines.pop(0)
-            from fmodpy.config import fmodpy_print as print
-            print(f"no match for '{line}'")
+        self.lines += 1
+        line = list_of_lines.pop(0).strip().split()
+        # Remove any comments on the line that may exist.
+        if ("!" in line): line = line[:line.index("!")]
+        # Catch a potential parsing error.
+        if (len(line) <= 1):
+            from fmodpy.exceptions import ParseError
+            raise(ParseError(f"Expected 'MODULE <NAME>', but the line did not contain the name of module.\n  {list_of_lines[0]}"))
+        # Get the name of this module.
+        self.name = line[1]
+        # ------- Default parsing operations -------
+        super().parse(list_of_lines)
+        # ------------------------------------------
+        # Get the set of things declared private.
+        private = set(self.private)
+        # Remove any instances of things that are declared private.
+        if (len(private) > 0):
+            for attr in ("arguments","interfaces","types","subroutines","functions"):
+                codes = getattr(self,attr)
+                to_remove = [i for (i,c) in enumerate(codes) if (c.name in private)]
+                for i in reversed(to_remove): codes.pop(i)
+                if (len(to_remove) > 0):
+                    from fmodpy.config import fmodpy_print as print
+                    print(f"  removed {len(to_remove)} from '{attr}' declared PRIVATE..")
+        # Remove any things not declared public if this MODULE is private.
+        if (self.status == "PRIVATE"):
+            public = set(self.public)
+            for attr in ("interfaces","types","subroutines","functions"):
+                codes = getattr(self,attr)
+                to_remove = [i for (i,c) in enumerate(codes) if (c.name not in public)]
+                for i in reversed(to_remove): codes.pop(i)
+                if (len(to_remove) > 0):
+                    from fmodpy.config import fmodpy_print as print
+                    print(f"  removed {len(to_remove)} from '{attr}' because this MODULE is PRIVATE..")
+        # Make sure all "arguments" don't show intent.
+        for a in self.arguments: a.show_intent = False

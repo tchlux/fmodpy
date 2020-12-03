@@ -14,6 +14,17 @@ class Fortran(Code):
                    (parse_type, "types"),
     ]
 
+    # Generate a string describing this file.
+    def __str__(self):
+        out = f"{self.type} {self.name}"
+        for (_, name) in self.can_contain:
+            if (len(getattr(self, name)) > 0): out += "\n"
+            for obj in getattr(self,name):
+                for line in str(obj).split("\n"):
+                    out += "  "+line+"\n"
+        return out
+
+
     # Create Fortran Subroutines with "BIND(C)" that are
     # accessible from C, translate arguments to Fortran, call the
     # Fortran code, and translates arguments back (if necessary).
@@ -52,6 +63,7 @@ class Fortran(Code):
                  '# --------------------------------------------------------------------',
                  '#               CONFIGURATION',
                  '# ', 
+                 'verbose = False',
                  'fort_compiler = "{f_compiler}"',
                  'shared_object_name = "{shared_object_name}"',
                  'this_directory = os.path.dirname(os.path.abspath(__file__))',
@@ -64,7 +76,7 @@ class Fortran(Code):
                  '#',
                  '# Try to import the existing object. If that fails, recompile and then try.',
                  'try:',
-                 '    {module_name}_clib = ctypes.CDLL(path_to_lib)',
+                 '    clib = ctypes.CDLL(path_to_lib)',
                  'except:',
                  '    # Remove the shared object if it exists, because it is faulty.',
                  '    if os.path.exists(shared_object_name):',
@@ -72,17 +84,17 @@ class Fortran(Code):
                  '    # Compile a new shared object.',
                  '    command = " ".join([fort_compiler, compile_options]',
                  '                        + ordered_dependencies + ["-o", path_to_lib])',
-                 '    print("Running command")',
-                 '    print("  ", command)',
+                 '    if verbose:',
+                 '        print("Running command")',
+                 '        print("  ", command)',
                  '    # Run the compilation command.',
                  '    import subprocess',
                  '    subprocess.run(command, shell=True, cwd=this_directory)',
                  '    # Remove all ".mod" files that were created to reduce clutter.',
                  '    all_mods = [f for f in os.listdir(os.curdir) if f[-4:] == ".mod"]',
                  '    for m in all_mods: os.remove(m)',
-                 '',
-                 '# Import the shared object file as a C library with ctypes.',
-                 'clib = ctypes.CDLL(path_to_lib)',
+                 '    # Import the shared object file as a C library with ctypes.',
+                 '    clib = ctypes.CDLL(path_to_lib)',
                  '',
                  '# --------------------------------------------------------------------',
                  '']

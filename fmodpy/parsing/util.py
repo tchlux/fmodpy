@@ -104,8 +104,8 @@ def simplify_fortran_file(in_file, old_fortran=False):
 # <open_with> and <close_width>. This is initially designed to extract
 # the elements within an open-close parenthesis while allowing for
 # nested parenthetical groups. Returns two lists, one containing the
-# group (if it starts at the beginning of <list_str>), the other
-# containing the remainder of the list of strings.
+# group (if it starts at the beginning of <list_str>, else empty), the
+# other containing the remainder of the list of strings.
 def pop_group(list_str, open_with="(", close_with=")"):
     group = []
     # Get the first element of the string (open the group, if matched).

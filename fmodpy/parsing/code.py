@@ -22,17 +22,6 @@ class Code:
     # List of (func) parsing functions that handle ignorable contents.
     will_ignore = []
 
-    # Generate a string describing this code.
-    def __str__(self):
-        out = f"{self.type} {self.name}"
-        for (_, name) in self.can_contain:
-            if (len(getattr(self, name)) > 0): out += "\n"
-            for obj in getattr(self,name):
-                for line in str(obj).split("\n"):
-                    out += "  "+line+"\n"
-        return out
-
-
     # Initialize this object.
     def __init__(self, list_of_lines, preceding_comments="", parent=None):
         self.parent = parent
@@ -65,12 +54,12 @@ class Code:
                 list_of_lines.pop(0)
                 continue
             # Check if this is a comment (line should not be empty).
-            if (line[0][:1] == "!"):
+            elif (line[0][:1] == "!"):
                 comments += "\n" + list_of_lines.pop(0)
                 continue
             # Check to see if this is the END of this object.
-            if (line[0] == "END"):
-                if (len(line) < 2):
+            elif (line[0] == "END"):
+                if (len(line) <= 1):
                     from fmodpy.exceptions import ParseError
                     raise(ParseError("Encountered unexpected 'END' without block type (e.g. SUBROUTINE, MODULE)."))
                 elif (line[1] == self.type):
@@ -97,12 +86,15 @@ class Code:
                 instances = parser(list_of_lines, comments, self)
                 length = len(list_of_lines) - pre_length
                 self.lines += length
+                # If instances were found, we have a match, break.
                 if (len(instances) > 0):
                     print(f"  parsed {len(instances)} into '{name}'..")
                     for inst in instances:
                         getattr(self,name).append( inst )
                     comments = ""
                     break
+                # If any parsing was done otherwise, then it was a match, break.
+                elif (length > 0): break
             else:
                 # Look for things that will be parsed, but ignored.
                 for parser in self.will_ignore:
@@ -110,7 +102,7 @@ class Code:
                     instances = parser(list_of_lines, comments, self)
                     length = len(list_of_lines) - pre_length
                     self.lines += length
-                    if (len(instances) > 0): break
+                    if ((len(instances) > 0) or (length > 0)): break
                 else:
                     # This is an unknown block of code.
                     if self.allowed_unknown:
@@ -120,11 +112,14 @@ class Code:
                     else:
                         from . import class_name
                         from fmodpy.exceptions import ParseError
-                        raise(ParseError(f"\n\nEncountered unrecognized line while parsing {class_name(self)}:\n\n{list_of_lines.pop(0)}\n\n"))
+                        raise(ParseError(f"\n\nEncountered unrecognized line while parsing {class_name(self)}:\n\n  {str([list_of_lines.pop(0)])[1:-1]}\n\n"))
         # Check for correct ending.
         if (self.needs_end and (not ended)):
             from fmodpy.exceptions import ParseError
             raise(ParseError(f"File ended without observing 'END {self.type}'."))
+        # Finalize docs (knowing they will be formatted soon).
+        self.docs = self.docs.replace("{","{{").replace("}","}}")
+        # Denote the end of the docs.
         print(f" {self.type.title()}.parse done.")
 
 
@@ -146,8 +141,72 @@ class Code:
         # Return the full list of lines.
         return lines
 
-    # Evaluate the btye-width of all contents (might compiling Fortran).
+    # Evaluate the btye-width of all contents (by compiling Fortran test).
     def eval_sizes(self, build_dir):
+        # Recursively evaluate the sizes of all children.
         for (_, name) in self.can_contain:
             for instance in getattr(self, name):
-                instance.eval_sizes(build_dir)
+                if (hasattr(instance, "eval_sizes")):
+                    instance.eval_sizes(build_dir)
+        # After evaluating the sizes for all children, if this code object
+        # has arguments inside of it, evaluate their sizes.
+        if hasattr(self, "arguments"):
+            # Evaluate the size of all arguments for this routine.
+            size_prog =  "PROGRAM GET_SIZE\n"
+            # Add a use line for the module this is in (if it is inside one).
+            if (self.parent is not None) and (self.parent.type == "MODULE"):
+                size_prog += f"  USE {self.parent.name}\n"
+                # Add any used modules by the parent (because this has access to those).
+                for line in self.parent.uses: size_prog += f"  {line}\n"
+            # Add used modules inside this code.
+            for line in sorted(self.uses): size_prog += line+"\n"
+            # Get the unique argument type:kind pairs, all arguments as values.
+            unique_types_and_kinds = {}
+            for arg in self.arguments:
+                # Append a unique identifier to "RESULT" for functions.
+                if (hasattr(self, "result") and (arg.name == self.name)):
+                    arg.name += "_result"
+                key = (arg.type,arg.kind)
+                unique_types_and_kinds[key] = unique_types_and_kinds.get(key,[]) + [arg]
+            # Add all unique (type,kind) arguments to the size check program.
+            for (t,k) in sorted(unique_types_and_kinds):
+                # Create a singleton argument of the same type to measure size.
+                arg = unique_types_and_kinds[(t,k)][0]
+                temp_arg = type(arg)([arg.type])
+                temp_arg.name = arg.function_safe_name()
+                temp_arg.kind = arg.kind
+                temp_arg.show_intent = False
+                size_prog += f"  {temp_arg}\n"
+            # Add print statements (printing the sizes).
+            for k in sorted(unique_types_and_kinds):
+                name = unique_types_and_kinds[k][0].name
+                size_prog += f"  WRITE (*,*) SIZEOF({name})\n"
+            # End the program file.
+            size_prog += "END PROGRAM GET_SIZE\n"
+            # Import some necessary configurations to make the SIZEOF program.
+            from fmodpy.config import run, f_compiler, \
+                GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
+            import os
+            size_prog_path = os.path.join(build_dir, GET_SIZE_PROG_FILE)
+            size_exec_path = os.path.join(build_dir, GET_SIZE_EXEC_FILE)
+            # Write the size program.
+            with open(size_prog_path, "w") as f: f.write(size_prog)
+            # Compile an executable "GET_SIZE" program. All of the 
+            # necessaray modules (for typing) should already be compiled.
+            code, stdout, stderr = run([f_compiler, "-o", size_exec_path, size_prog_path])
+            if (code != 0):
+                from fmodpy.exceptions import CompileError
+                error_message = "\n\nCompilation of a program for size checking failed.\n"+\
+                                     "This may have happened because necessary module files\n"+\
+                                     "are not compiled and present in the build directory.\n\n"+\
+                                "\n".join(stderr)
+                raise(CompileError(error_message))
+            # Run the "GET_SIZE" executable.
+            code, stdout, stderr = run([size_exec_path])
+            if (code != 0): raise(NotImplementedError)
+            # Read the sizes from the output.
+            sizes = [s.strip() for s in stdout if s.strip().isnumeric()]
+            # Assign the sizes to the appropriate arguments.
+            for s, key in zip(sizes, sorted(unique_types_and_kinds)):
+                for arg in unique_types_and_kinds[key]:
+                    arg.size = s

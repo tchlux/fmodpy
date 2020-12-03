@@ -158,20 +158,24 @@ class Subroutine(Code):
         # Generate the input signature.
         fortran_arguments = []
         for arg in self.arguments: fortran_arguments += arg.fort_input()
+        # Regardless of if this is a FUNCTION or SUBROUTINE, we will always
+        #  wrap with a SUBROUTINE to avoid RESULT related name conflicts.
         lines = ['',f"SUBROUTINE C_{self.name}({', '.join(fortran_arguments)}) BIND(C)"]
         # Add the "USE" line.
-        lines += self.uses
+        lines += ["  "+l for l in self.uses]
         if any((a.allocatable and a._is_output()) for a in self.arguments):
             lines += ["  USE ISO_FORTRAN_ENV, ONLY: INT64"]
-        # Enforce no implicit typing (within this subroutine).
+        # Check if this is in a module.
+        in_module = (self.parent is not None) and (self.parent.type == "MODULE")
+        if (in_module): lines += [f"  USE {self.parent.name}, ONLY: {self.name}"]
+        # Enforce no implicit typing (within this code).
         lines += [f"  IMPLICIT NONE"]
         # Add all argument declarations.
         for arg in self.arguments:
-            lines += [''] + ["  " + l for l in arg.fort_declare()]
+            lines += ["  " + l for l in arg.fort_declare()]
         lines += ['']
         # If this is not inside of a module, need to define an interface.
-        not_in_module = (self.parent is None) or (self.parent.type != "MODULE")
-        if (not_in_module or (len(self.interfaces) > 0)):
+        if ((not in_module) or (len(self.interfaces) > 0)):
             # Add the "INTERFACE" line for the source subroutine.
             lines += ["  INTERFACE"]
             # Need to define the interface to the C function that
@@ -181,7 +185,7 @@ class Subroutine(Code):
                 for f in i.subroutines: lines += ["    "+l for l in f.fortc_interface()]
             # Need to define the interface to the actual function
             # being called (if this is not part of a module).
-            if (not_in_module):
+            if (not in_module):
                 lines += ["    "+l for l in str(self).split("\n")]
             lines += ["  END INTERFACE",'']
         # Add all argument preparation code.
@@ -247,8 +251,8 @@ class Subroutine(Code):
         if (len(self.interfaces) > 0):
             lines += ['', 'CONTAINS']
             for i in self.interfaces:
-                # Need to define the interface to the C function that
-                #   will be called by the internal Fortran wrapper.
+                # TODO: Need to define the interface to the C function that
+                #       will be called by the internal Fortran wrapper.
                 for f in i.functions: lines += ["  "+l for l in f.fortc_subroutine()]
                 for f in i.subroutines: lines += ["  "+l for l in f.fortc_subroutine()]
             lines += ['']
@@ -257,78 +261,9 @@ class Subroutine(Code):
         lines += [f"END SUBROUTINE C_{self.name}",'']
         return lines
 
-    # Evaluate the size of all arguments within this code.
-    def eval_sizes(self, build_dir):
-        # Evaluate the size of all arguments for this routine.
-        size_prog =  "PROGRAM GET_SIZE\n"
-        # Add a use line for the module this is in (if it is inside one).
-        if (self.parent is not None) and (self.parent.type == "MODULE"):
-            size_prog += f"  USE {self.parent.name}\n"
-            # Add any used modules by the parent (because this has access to those).
-            for m in sorted(self.parent.uses):
-                if (len(self.parent.uses[m]) == 0): size_prog += f"  USE {m}\n"
-                else: size_prog += f"  USE {m}, ONLY: {', '.join(self.parent.uses[m])}\n"
-        # Add used modules inside this code.
-        for line in sorted(self.uses): size_prog += line+"\n"
-        # Get the unique argument type:kind pairs, all arguments as values.
-        unique_types_and_kinds = {}
-        for arg in self.arguments:
-            # Append a unique identifier to "RESULT" for functions.
-            if (hasattr(self, "result") and (arg.name == self.name)):
-                arg.name += "_result"
-            key = (arg.type,arg.kind)
-            unique_types_and_kinds[key] = unique_types_and_kinds.get(key,[]) + [arg]
-        # Add all unique (type,kind) arguments to the size check program.
-        for (t,k) in sorted(unique_types_and_kinds):
-            # Create a singleton argument of the same type to measure size.
-            arg = unique_types_and_kinds[(t,k)][0]
-            temp_arg = type(arg)([arg.type])
-            temp_arg.name = arg.function_safe_name()
-            temp_arg.kind = arg.kind
-            temp_arg.show_intent = False
-            size_prog += f"  {temp_arg}\n"
-        # Add print statements (printing the sizes).
-        for k in sorted(unique_types_and_kinds):
-            name = unique_types_and_kinds[k][0].name
-            size_prog += f"  PRINT *, SIZEOF({name})\n"
-        # End the program file.
-        size_prog += "END PROGRAM GET_SIZE\n"
-        # Import some necessary configurations to make the SIZEOF program.
-        from fmodpy.config import run, f_compiler, f_compiler_args, \
-            GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
-        import os
-        size_prog_path = os.path.join(build_dir, GET_SIZE_PROG_FILE)
-        size_exec_path = os.path.join(build_dir, GET_SIZE_EXEC_FILE)
-        # Write the size program.
-        with open(size_prog_path, "w") as f: f.write(size_prog)
-        try:
-            # Compile an executable "GET_SIZE" program. All of the 
-            # necessaray modules (for typing) should already be compiled.
-            code, stdout, stderr = run([f_compiler, "-o", size_exec_path, size_prog_path])
-            if (code != 0):
-                from fmodpy.exceptions import CompileError
-                error_message = "\n\nCompilation of a program for size checking failed.\n"+\
-                                     "This may have happened because necessary module files\n"+\
-                                     "are not compiled and present in the build directory.\n\n"+\
-                                "\n".join(stderr)
-                raise(CompileError(error_message))
-            # Run the "GET_SIZE" executable.
-            code, stdout, stderr = run([size_exec_path])
-            if (code != 0): raise(NotImplementedError)
-            # Read the sizes from the output.
-            sizes = [s.strip() for s in stdout if s.strip().isnumeric()]
-            # Assign the sizes to the appropriate arguments.
-            for s, key in zip(sizes, sorted(unique_types_and_kinds)):
-                for arg in unique_types_and_kinds[key]:
-                    arg.size = s
-        # Make sure that the size program is always deleted (even under exceptions).
-        except Exception as exception: raise(exception)
-
-
     # Generate Python code that accesses this Subroutine.
     def generate_python(self):
         from fmodpy.config import fmodpy_print as print
-        print(f"generating Python for {self.type} {self.name}..")
         lines = [ '',
                   "# ----------------------------------------------",
                  f"# Wrapper for the Fortran subroutine {self.name}",
@@ -336,6 +271,9 @@ class Subroutine(Code):
         py_name = self.name.lower()
         # Add the Python-callable function.
         py_input = []
+        # If this is in a module, then the first attribute will be "self".
+        in_module = (self.parent is not None) and (self.parent.type == "MODULE")
+        if in_module: py_input.append("self")
         # Cycle args (make sure the ones that are optional are listed last).
         for arg in sorted(self.arguments, key=lambda a: int(a._is_optional())):
             py_input += arg.py_input()

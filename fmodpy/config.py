@@ -4,7 +4,7 @@ import os, sysconfig
 omp                 = False
 blas                = False
 lapack              = False
-verbose             = True
+verbose             = False
 autocompile         = True
 wrap                = True
 rebuild             = False

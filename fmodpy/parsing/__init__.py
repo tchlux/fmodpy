@@ -62,6 +62,75 @@ def parse_type(list_of_lines, comments, parent):
     from .type import Type
     return parse_code(Type, list_of_lines, comments, parent)
 
+# Parse a PUBLIC line, identifying routines that are public.
+def parse_public(list_of_lines, comments, parent):
+    # Skip if there are no lines to process.
+    if (len(list_of_lines) == 0): return []
+    line = list_of_lines[0].strip().split()
+    # Remove any comments on the line that may exist.
+    if ("!" in line): line = line[:line.index("!")]
+    # Skip empty lines.
+    if (len(line) == 0):
+        list_of_lines.pop(0)
+        return []
+    # Check to see if the first element is "USE".
+    # If it is, then return a list with one string (the line).
+    if (line[0] == "PUBLIC"):
+        # If there is only the word 'PUBLIC', then it is a status.
+        if (len(line) == 1):
+            parent.status = "PUBLIC"
+            # Remove this line from the list (because it has been parsed).
+            list_of_lines.pop(0)
+            return []
+        # Otherwise there is more in this line.
+        if (''.join(line[1:3]) != "::"):
+            from fmodpy.exceptions import ParseError
+            raise(ParseError(f"Found phrase 'PUBLIC' followed by something other than '::' in line:\n  {list_of_lines[0]}."))
+        line = line[3:]
+        # Remove all commas from the line.
+        commas = [i for i in range(len(line)) if (line[i] == ",")]
+        for i in reversed(commas): line.pop(i)
+        # Remove this line from the list (because it has been parsed).
+        list_of_lines.pop(0)
+        # Only variable and function names remain, they are the instances.
+        return line
+    # Otherwise, no PUBLIC line found, return empty list.
+    return []
+
+# Parse a PRIVATE line, identifying routines that are private.
+def parse_private(list_of_lines, comments, parent):
+    # Skip if there are no lines to process.
+    if (len(list_of_lines) == 0): return []
+    line = list_of_lines[0].strip().split()
+    # Remove any comments on the line that may exist.
+    if ("!" in line): line = line[:line.index("!")]
+    # Skip empty lines.
+    if (len(line) == 0):
+        list_of_lines.pop(0)
+        return []
+    # Check to see if the first element is "USE".
+    # If it is, then return a list with one string (the line).
+    if (line[0] == "PRIVATE"):
+        if (len(line) == 1):
+            parent.status = "PRIVATE"
+            # Remove this line from the list (because it has been parsed).
+            list_of_lines.pop(0)
+            return []
+        # Otherwise there is more in this line.
+        if (''.join(line[1:3]) != "::"):
+            from fmodpy.exceptions import ParseError
+            raise(ParseError(f"Found phrase 'PRIVATE' followed by something other than '::' in line:\n  {list_of_lines[0]}"))
+        line = line[3:]
+        # Remove all commas from the line.
+        commas = [i for i in range(len(line)) if (line[i] == ",")]
+        for i in reversed(commas): line.pop(i)
+        # Remove this line from the list (because it has been parsed).
+        list_of_lines.pop(0)
+        # Only variable and function names remain, they are the instances.
+        return line
+    # Otherwise, no PRIVATE line found, return empty list.
+    return []
+
 # Parse a USE line, return a string in a list.
 def parse_use(list_of_lines, comments, parent):
     # Skip if there are no lines to process.
@@ -73,7 +142,7 @@ def parse_use(list_of_lines, comments, parent):
     # If it is, then return a list with one string (the line).
     if (line[0] == "USE"): return [list_of_lines.pop(0).replace(": :","::")]
     # Otherwise, no USE line found, return empty list.
-    else:                  return []
+    else: return []
 
 # Parse a line with IMPLICIT NONE, return string in a list.
 def parse_implicit(list_of_lines, comments, parent):
@@ -91,7 +160,7 @@ def parse_implicit(list_of_lines, comments, parent):
             from fmodpy.exceptions import ParseError
             raise(ParseError("Found phrase 'IMPLICIT' but it was not followed by 'NONE'."))
     # Otherwise, no IMPLICIT line found, return empty list.
-    else:                  return []
+    else: return []
 
 # Only initialize a "code" object if the line is not empty and the
 # type is matched (after removing any prefixes).
@@ -152,9 +221,21 @@ def parse_argument(list_of_lines, comments, parent):
     # Get all names from the tail (with their dimensions, if given).
     names = [tail.pop(0)]
     while (len(tail) > 0):
+        # First, check to see of there is a paranthetical group after
+        #   the previous argument name (this would be for a size, like
+        #   ARG(10,2), but it could have expresssions inside as well).
         group, tail = pop_group(tail, open_with="(", close_with=")")
         if (len(group) > 0): names[-1] += " ( "+" ".join(group)+" )"
+        # If there is a "," it indicates more arguments follow.
         elif (tail[0] == ","): tail.pop(0)
+        # If this is a PARAMETER assignment, there could be an "= value"
+        #  after the name. There will only be other arguments after
+        #  this one if there is a "," in the line. If no "," then stop.
+        elif (tail[0] == "="):
+            if ("," in tail):
+                tail = tail[tail.index(",")+1:]
+            else: break
+        # Finally, if it is not a comma, group, or value, it must be an argument name.
         else: names.append(tail.pop(0))
     # Cycle the names, converting all into proper Argument objects.
     args = []

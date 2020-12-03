@@ -1,3 +1,6 @@
+# TODO: Vectors as module attributes need to be returned by memory
+#       address instead of being copied.
+
 # TODO: Consider a user-defined "TYPE" that only contains one of the
 #       fundamental types to simply be of that type (no struct).
 # TODO: User defined "TYPE" can only contain fundamental types
