@@ -84,11 +84,10 @@ class Code:
             for (parser, name) in self.can_contain:
                 pre_length = len(list_of_lines)
                 instances = parser(list_of_lines, comments, self)
-                length = len(list_of_lines) - pre_length
+                length = pre_length - len(list_of_lines)
                 self.lines += length
                 # If instances were found, we have a match, break.
                 if (len(instances) > 0):
-                    print(f"  parsed {len(instances)} into '{name}'..")
                     for inst in instances:
                         getattr(self,name).append( inst )
                     comments = ""
@@ -203,7 +202,10 @@ class Code:
                 raise(CompileError(error_message))
             # Run the "GET_SIZE" executable.
             code, stdout, stderr = run([size_exec_path])
-            if (code != 0): raise(NotImplementedError)
+            if (code != 0): raise(NotImplementedError("Argument byte-size checking program failed, unexpected."))
+            # Remove the size program.
+            os.remove(size_prog_path)
+            os.remove(size_exec_path)
             # Read the sizes from the output.
             sizes = [s.strip() for s in stdout if s.strip().isnumeric()]
             # Assign the sizes to the appropriate arguments.

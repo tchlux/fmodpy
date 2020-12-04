@@ -6,11 +6,15 @@ with open(os.path.join(ABOUT_DIR,"version.txt")) as f:
     __version__ = f.read().strip()
 del f
 
-# Import the main configuration (and initialize the configuration).
+# Steal the documentation from .fmodpy, instead of duplicating here.
+from .fmodpy import __doc__
+
+# Import the main configuration (needed to initialize the configuration).
 import fmodpy.config
 
 # Import the main features of this package.
-from .fmodpy import fimport, configure, make_wrapper
+from .fmodpy import fimport, configure
 
 # Set "__all__" so that "from fmodpy import *" returns expected stuff.
-__all__ = ["fimport", "configure", "make_wrapper"]
+__all__ = ["fimport", "configure"]
+

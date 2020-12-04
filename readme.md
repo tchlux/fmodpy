@@ -9,25 +9,36 @@ An easy-to-use Fortran wrapper for Python.
 Modern Fortran is capable of being integrated with Python near
 seamlessly allowing for rapid transition between prototype and
 optimized production-ready code. This packages aims to make Fortran
-code as easy to import and use as native Python modules. This combines
-the performance of Fortran with the convenience and accessibility of
+code as easy to import and use as native Python. This combines the
+performance of Fortran with the convenience and accessibility of
 Python, allowing for a productive and exciting development pipeline.
 
+
+## IMPORTANT NOTICE (December 2020)
+
+  This code is currently undergoing a significant revision. Any tagged
+  versions should be considered stable, but the master branch (this
+  repository in its current form) is not guaranteed to be stable.
+  
 
 ## INSTALLATION:
 
     $ pip install fmodpy
 
-  This code expects that you already have a Fortran compiler and a C
-  compiler installed. By default, many C compilers do not have access
-  to the Fortran header files (for Fortran intrinsics like memory
-  allocation and math operations) so if you experience linking errors,
-  then use something like `locate libgfortran.a` (for whatever your
-  Fortran compiler header file will be named) and set the C
-  `ld_shared_path` argument to that directory path.
+  This code expects that you already have a Fortran compiler
+  installed. By default most machines do not have a Fortran compiler
+  installed, but most package managers support installation of
+  `gfortran` (a GNU compiler). In addition, there are popular
+  commercial Fortran compilers such as `pgifortran` (the [PGI
+  compiler](https://www.pgroup.com/products/index.htm) that uniquely
+  supports OpenACC), `ifort` (the [Intel
+  compiler](https://software.intel.com/content/www/us/en/develop/tools/oneapi/components/fortran-compiler.html)),
+  and `f90` (the [Oracle Sun
+  compiler](https://www.oracle.com/application-development/technologies/developerstudio-features.html)).
 
-  Perhaps the easiest setup is to install `gfortran` and `gcc` with
-  your preferred package manager, then default behavior should work.
+  The easiest setup is to install `gfortran` with your preferred
+  package manager, then the default behaviors of `fmodpy` will work
+  correctly.
 
 
 ## USAGE:
@@ -38,44 +49,50 @@ Python, allowing for a productive and exciting development pipeline.
 import fmodpy
 
 # Compile and import the Fortran code. (This will automatically
-#  recompile the code if it has been saved recently.)
-module = fmodpy.fimport("<fortran source file>",
-                        f_compiler="gfortran",
-                        c_linker="gcc", c_link_args=["-lgfortran"])
+#  recompile the module if the Fortran source has been saved 
+#  more recently than the last time the module was imported.)
+module = fmodpy.fimport("<fortran source file>")
 ```
 
   For more details, see the `help(fmodpy.fimport)` documentation.
+  Notably, global configurations (i.e., the default Fortran compiler) 
+  can be viewed and edited with `fmodpy.configure`.
 
 ### COMMAND LINE:
 
-  For details on the different options, run python interactively and 
-  look at `help(fmodpy.wrap)`. The execution from the command line looks like:
+  Run `fmodpy` from the command line with:
 
-    $ python -m fmodpy <fortran source file> [<fmodpy.wrap kwargs>] [<fmodpy.globals() kwargs>] [<functions to wrap>]
+    $ python -m fmodpy <fortran source file> [<setting1>=<value1>] [<setting2>=<value2] ...
 
-  This outputs a <fortran mod name>.so python module that can be
-  imported as any other python module would be.
+  The result will be a directory containing a Python package that
+  wraps and calls the underlying Fortran code.
+
+  Execute with no arguments to get help documentation. For a list of
+  the different configuration options, run the command `python -c
+  "import fmodpy; fmodpy.configure()"`. 
 
 
 ## HOW IT WORKS:
 
   Reads the fortran file, abstracting out the modules, subroutines,
   functions. Identifies the type-description of each argument for
-  subroutines and functions. Uses type-descriptors to generate a
-  minimal cython wrapper and fortran wrapper. Afterwards a module is
-  generated using python distutils' setup.py. When importing and
-  using the generated fortran module, the call sequence looks like:
+  module variables, subroutines, and functions. Uses type-descriptors
+  to generate a Fortran wrapper with `BIND(C)` enabled, as well as a
+  matching Python wrapper using `ctypes` to pass data from Python into
+  the Fortran wrapper. The constructed Python wrapper contains
+  compilation settings will automatically recompile a shared object
+  file containing the underlying original Fortran source code. 
+  Overall, the call sequence at runtime looks like:
 
        Python code
-    -> Cython
-    -> Wrapped fortran (transferring characters, implicit shapes, etc.)
-    -> Original fortran
+    -> Python wrapper converting to C types
+    -> Fortran wrapper bound to C (transferring characters, implicit shapes, etc.)
+    -> Original Fortran code
 
 
   This uses the specifications from the fortran file to determine how
   the interface for each subroutine / function should behave. (I.e.,
-  `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input
-  when size can be inferred.)
+  `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input.)
 
 
 ## VERSION HISTORY:
@@ -90,18 +107,10 @@ module = fmodpy.fimport("<fortran source file>",
   arguments may be removed or renamed. The changes will allow for the
   following features that are **not** currently supported:
 
- - multiple Fortran modules in one file
  - custom `TYPE` in Fortran (and arrays of that type)
- - returned `ALLOCATABLE` arrays in Fortran
- - automatically generated `Makefile` and `make.py` scripts for
-   distribution that do *not* require other users to have `fmodpy`
- - project-specific `fmodpy` configuration files
- - a default global `fmodpy` configuration file
+ - passing a `PROCEDURE` as an argument to Fortran code
 
-  Along with these improvements, the code is being modularized to
-  allow for easier sustained development. I've been working on this
-  throughout 2019, and hope to have the work completed sometime in
-  2020.
+  This work is ongoing and the goal is to complete it before the end of 2020.
 
 
 ## EXAMPLE CODE
@@ -117,11 +126,7 @@ operation using Fortran.
 import fmodpy
 import numpy as np
 
-code = fmodpy.fimport("code.f03",
-                      f_compiler="gfortran",
-                      c_linker="gcc",
-                      c_link_args=[] # "-lgfortran" might be needed.
-)
+code = fmodpy.fimport("code.f03")
 
 a = np.array([
     [1,2,3,4,5],

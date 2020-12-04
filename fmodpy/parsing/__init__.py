@@ -63,7 +63,7 @@ def parse_type(list_of_lines, comments, parent):
     return parse_code(Type, list_of_lines, comments, parent)
 
 # Parse a PUBLIC line, identifying routines that are public.
-def parse_public(list_of_lines, comments, parent):
+def parse_public(list_of_lines, comments, parent, keyword="PUBLIC"):
     # Skip if there are no lines to process.
     if (len(list_of_lines) == 0): return []
     line = list_of_lines[0].strip().split()
@@ -73,20 +73,16 @@ def parse_public(list_of_lines, comments, parent):
     if (len(line) == 0):
         list_of_lines.pop(0)
         return []
-    # Check to see if the first element is "USE".
-    # If it is, then return a list with one string (the line).
-    if (line[0] == "PUBLIC"):
+    # Check to see if the first element is 'PUBLIC'.
+    if (line[0] == keyword):
         # If there is only the word 'PUBLIC', then it is a status.
         if (len(line) == 1):
-            parent.status = "PUBLIC"
+            parent.status = keyword
             # Remove this line from the list (because it has been parsed).
             list_of_lines.pop(0)
             return []
-        # Otherwise there is more in this line.
-        if (''.join(line[1:3]) != "::"):
-            from fmodpy.exceptions import ParseError
-            raise(ParseError(f"Found phrase 'PUBLIC' followed by something other than '::' in line:\n  {list_of_lines[0]}."))
-        line = line[3:]
+        # Strip out the double colon if it exists (it's optional).
+        if (''.join(line[1:3]) == "::"): line = line[3:]
         # Remove all commas from the line.
         commas = [i for i in range(len(line)) if (line[i] == ",")]
         for i in reversed(commas): line.pop(i)
@@ -94,42 +90,12 @@ def parse_public(list_of_lines, comments, parent):
         list_of_lines.pop(0)
         # Only variable and function names remain, they are the instances.
         return line
-    # Otherwise, no PUBLIC line found, return empty list.
+    # Otherwise, no 'PUBLIC' line found, return empty list.
     return []
 
 # Parse a PRIVATE line, identifying routines that are private.
 def parse_private(list_of_lines, comments, parent):
-    # Skip if there are no lines to process.
-    if (len(list_of_lines) == 0): return []
-    line = list_of_lines[0].strip().split()
-    # Remove any comments on the line that may exist.
-    if ("!" in line): line = line[:line.index("!")]
-    # Skip empty lines.
-    if (len(line) == 0):
-        list_of_lines.pop(0)
-        return []
-    # Check to see if the first element is "USE".
-    # If it is, then return a list with one string (the line).
-    if (line[0] == "PRIVATE"):
-        if (len(line) == 1):
-            parent.status = "PRIVATE"
-            # Remove this line from the list (because it has been parsed).
-            list_of_lines.pop(0)
-            return []
-        # Otherwise there is more in this line.
-        if (''.join(line[1:3]) != "::"):
-            from fmodpy.exceptions import ParseError
-            raise(ParseError(f"Found phrase 'PRIVATE' followed by something other than '::' in line:\n  {list_of_lines[0]}"))
-        line = line[3:]
-        # Remove all commas from the line.
-        commas = [i for i in range(len(line)) if (line[i] == ",")]
-        for i in reversed(commas): line.pop(i)
-        # Remove this line from the list (because it has been parsed).
-        list_of_lines.pop(0)
-        # Only variable and function names remain, they are the instances.
-        return line
-    # Otherwise, no PRIVATE line found, return empty list.
-    return []
+    return parse_public(list_of_lines, comments, parent, keyword="PRIVATE")
 
 # Parse a USE line, return a string in a list.
 def parse_use(list_of_lines, comments, parent):

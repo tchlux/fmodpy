@@ -1,13 +1,10 @@
 # fmodpy is an automatic fortran wrapper for python.
 # 
-# This program is designed to processes a source fortran file into the
-# following structure and wrap all contained code into a python module
+# This program is designed to processes a source fortran file and wrap
+# all contained code into a python module.
 # 
 #   fimport            -- Given a path to a Fortran source file,
 #                         wrap it and return a Python module.
-#   make_wrapper       -- Given a source Fortran file, a build directory,
-#                         and a name: generate a Fortran wrapper code
-#                         that is callable from C, and a Python wrapper.
 # 
 # For configuration and future usage of `fmodpy` on a single machine,
 # use the following function.
@@ -22,11 +19,6 @@
 # 
 #                         DEVELOPMENT
 #                            PLANS
-# 
-# - load Modules as a Python class
-# --- use properties to place getter and setter functions over
-#     internal public attributes of the Fortran module
-# --- define all internal subroutines and functions as static methods
 # 
 # - support custom types defined in Fortran
 # --- parse the custom type and determine its contents in terms of basic types
@@ -86,7 +78,7 @@ from fmodpy.config import fmodpy_print as print
 #                     see `help(fmodpy)` for more information, or
 #                     run again with 'verbose=True' to see options.
 # 
-#   KEYWORD OPTIONS (some important ones, there are more):
+#   KEYWORD OPTIONS (some important ones, more in 'fmodpy.configure'):
 #    autocompile -- bool, whether or not automatic compilation of
 #                   dependancies should be attempted.
 #    rebuild     -- bool, True if you want to rebuild even though the
@@ -183,9 +175,8 @@ def fimport(input_fortran_file, name=None, build_dir=None,
         built, failed = autocompile_files(build_dir)
         if (len(built) > 0):  print(" succeeded:", built)
         if (len(failed) > 0): print(" failed:   ", failed)
-        depends_files = built + depends_files
+        depends_files = [os.path.basename(f) for f in built] + depends_files
         print()
-
     # Write the wrappers to the files so they can be compiled.
     fortran_wrapper_path = os.path.join(build_dir,fortran_wrapper_file)
     python_wrapper_path = os.path.join(build_dir,python_wrapper_file)
@@ -196,13 +187,21 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (wrap or (not fortran_wrapper_exists) or (not python_wrapper_exists)):
         fortran_wrapper, python_wrapper = make_wrapper(
             source_path, build_dir, name)
+        # Add fortran wrapper to dependencies and remove any
+        #  duplicates from the "depends_files" list.
+        depends_files.append( os.path.basename(fortran_wrapper_path) )
+        i = len(depends_files)
+        while (i > 1):
+            i -= 1
+            while (depends_files.index(depends_files[i]) < i):
+                depends_files.pop(depends_files.index(depends_files[i]))
+                i -= 1
         # Fill all the missing components of the python_wrapper string.
         python_wrapper = python_wrapper.format(
             f_compiler = f_compiler,
             shared_object_name = name + ".so",
-            f_compiler_args = " ".join(f_compiler_args),
-            dependencies = ([os.path.basename(f) for f in depends_files] +
-                            [os.path.basename(fortran_wrapper_path)])
+            f_compiler_args = str(f_compiler_args),
+            dependencies = depends_files
         )
     # Write the wrapper files if this program is supposed to.
     if (not fortran_wrapper_exists) or wrap:
@@ -210,12 +209,15 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (not python_wrapper_exists) or wrap:
         with open(python_wrapper_path, "w") as f: f.write( python_wrapper )
 
-    # Make the `__init__.py` for the newly created Python module.
-    with open(os.path.join(build_dir,"__init__.py"),'a') as f:
-        f.write(f"\nfrom .{name+PYTHON_WRAPPER_EXT} import *\n")
-    # Remove the old module if it already exists.
+    # Make the `__init__.py` for the newly created Python module a link.
+    init_file = os.path.join(build_dir,"__init__.py")
+    if os.path.exists(init_file): os.remove(init_file)
+    os.symlink(os.path.join(".", python_wrapper_file), init_file)
+    print()
+    print(f"Making symlink from '__init__.py' to '{python_wrapper_file}'")
+    print()
+    # Generate the final module path, move into location.
     final_module_path = os.path.join(output_dir, name)
-
     # Move the compiled module to the output directory.
     print("Moving from:", f"  {build_dir}", "to", f"  {final_module_path}", sep="\n")
     if not (build_dir == output_dir):
@@ -452,8 +454,9 @@ def should_rebuild_module(source_path, module_name, module_directory):
 
 # ====================================================================
 
-# Save a configuration globally on this machine.
-def configure(*to_delete, **conf):
+# Save a configuration globally on this machine. To see the list of
+# all configurations, call with no arguments.
+def configure(*to_delete, **to_save):
     # Get the "home_directory" and the "config_file" for saving.
     import os, time, builtins
     from fmodpy.config import home_directory, config_file
@@ -468,7 +471,7 @@ def configure(*to_delete, **conf):
             lines = [l.strip() for l in f.readlines()]
     # If no arguments were given, print the current
     # configuration to standard output.
-    if ((len(to_delete) == 0) and (len(conf) == 0)):
+    if ((len(to_delete) == 0) and (len(to_save) == 0)):
         import fmodpy
         from fmodpy.config import load_config
         existing = {''.join([v.strip() for v in l.split("=")[:1]]) for l in lines}
@@ -476,18 +479,18 @@ def configure(*to_delete, **conf):
         # Collect the lines of the printout.
         lines = [f"fmodpy ({fmodpy.__version__}):"]
         finished_existing = False
-        if (len(existing) > 0): lines += ["",f" declared in {path}",""]
+        if (len(existing) > 0): lines += [f" # configuration declared in {path}"]
         for name in sorted(sorted(conf), key=lambda n: n not in existing):
-            if (len(existing) > 0) and (name not in existing) and said_default:
-                lines += [""," default values",""]
-                finished_existing = False
+            if (len(existing) > 0) and (name not in existing) and (not finished_existing):
+                lines += [""," # default values"]
+                finished_existing = True
             lines.append(f"  {name} = {str([conf[name]])[1:-1]}")
         # Print the output.
         print("\n".join(lines+[""]))
     else:
         # Overwrite the file, commenting out all the old stuff.
         with open(path, "w") as f:
-            to_remove = {n for n in to_delete}.union(set(conf))
+            to_remove = {n for n in to_delete}.union(set(to_save))
             # Write the old contents, commented out.
             for l in lines:
                 # If this variable is being overwritten, comment out the former.
@@ -498,5 +501,5 @@ def configure(*to_delete, **conf):
             # Write the new contents.
             print("", file=f)
             print("# ",time.ctime(), file=f)
-            for name in sorted(conf):
-                print(f"{name} = {str([conf[name]])[1:-1]}", file=f)
+            for name in sorted(to_save):
+                print(f"{name} = {str([to_save[name]])[1:-1]}", file=f)

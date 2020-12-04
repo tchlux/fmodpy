@@ -57,4 +57,3 @@ if __name__ == "__main__":
     # Check to see if the user has a fortran compiler. Create a
     # warning if there is no Fortran compiler installed.
 
-    # TODO

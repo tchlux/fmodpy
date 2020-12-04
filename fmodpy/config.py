@@ -1,26 +1,24 @@
 import os, sysconfig
 
 # Default configurable variables.
-omp                 = False
-blas                = False
-lapack              = False
-verbose             = False
-autocompile         = True
-wrap                = True
-rebuild             = False
-show_warnings       = True
-debug_line_numbers  = False
-implicit_typing     = False
-log_file            = os.devnull
-f_compiler          = 'gfortran'
-f_compiler_args     = '-fPIC -shared -O3'
-link_omp            = '-fopenmp'
-link_blas           = '-lblas'
-link_lapack         = '-lblas -llapack'
-disallowed_options  = '-Wshorten-64-to-32'
-python_link_command = ' '.join(sysconfig.get_config_vars().get('BLDSHARED','').split(' ')[1:])
-home_directory      = os.path.expanduser("~")
-config_file         = ".fmodpy.py"
+omp                = False
+blas               = False
+lapack             = False
+verbose            = False
+autocompile        = True
+wrap               = True
+rebuild            = False
+show_warnings      = True
+debug_line_numbers = False
+implicit_typing    = False
+log_file           = os.devnull
+f_compiler         = 'gfortran'
+f_compiler_args    = '-fPIC -shared -O3'
+link_omp           = '-fopenmp'
+link_blas          = '-lblas'
+link_lapack        = '-lblas -llapack'
+home_directory     = os.path.expanduser("~")
+config_file        = ".fmodpy.py"
 
 # --------------------------------------------------------------------
 #      Development globals, not intended to be changed by users.
@@ -29,13 +27,12 @@ config_file         = ".fmodpy.py"
 BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
                     'show_warnings', 'debug_line_numbers']
 LIST_CONFIG_VARS = ['f_compiler_args', 'link_omp', 'link_blas',
-                    'link_lapack', 'disallowed_options',
-                    'python_link_command']
+                    'link_lapack']
 # File related maniplation arguments
 PY_EXT = ".py"
 FORT_EXT = ".f90"
-PYTHON_WRAPPER_EXT = "_from_py"
-FORT_WRAPPER_EXT = "_bind_c"+FORT_EXT
+PYTHON_WRAPPER_EXT = "_python_wrapper"
+FORT_WRAPPER_EXT = "_c_wrapper"+FORT_EXT
 GET_SIZE_PROG_FILE = "fmodpy_get_size"+FORT_EXT
 GET_SIZE_EXEC_FILE = "fmodpy_get_size"
 # --------------------------------------------------------------------
@@ -157,10 +154,6 @@ def load_config(**kwargs):
         elif (type(config[var]) is not bool):
             from fmodpy.exceptions import IllegalConfiguration
             raise(IllegalConfiguration(f"The variable '{var}' is supposed to be a bool or string, but is neither."))
-
-    # Update the `python_link_command` to not have any `disallowed_options`.
-    config["python_link_command"] = [a for a in config["python_link_command"]
-                                     if a not in disallowed_options]
 
     # If 'omp' is True, then add OpenMP compilation and link arguments
     # to the list of arguments already.
