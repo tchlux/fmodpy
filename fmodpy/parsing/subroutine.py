@@ -45,16 +45,14 @@ class Subroutine(Code):
         if ((max(len(self.interfaces),len(self.types)) > 0) and
             (len(self.arguments) > 0)): out += "\n"
         # Add arguments.
-        for a in self.arguments:
-            if (a.type == "PROCEDURE"): continue
-            out += f"  {a}\n"
+        for a in self.arguments: out += f"  {a}\n"
         # End the subroutine.
         out += f"END {self.type} {self.name}"
         return out
 
     # Given a list of lines (of a source Fortran file), parse out this
-    # Subroutine (assuming the first line is the first line *inside* of
-    # this Subroutine).
+    # Subroutine (assuming the first line is the line declaring this
+    # Subroutine).
     def parse(self, list_of_lines):
         self.lines += 1
         # Parse the name of this subroutine out of the argument list.
@@ -112,13 +110,21 @@ class Subroutine(Code):
         # If there are any remaining undefined arguments..
         if (len(argument_names) > 0):
             from fmodpy.config import implicit_typing
-            if (implicit_typing): raise(NotImplementedError)
+            # Assign implicit INTEGER and REAL types to undefined arguments.
+            if (implicit_typing):
+                integer_letters = {'I', 'J', 'K', 'L', 'M', 'N'}
+                for a in argument_names:
+                    if (a[0] in integer_letters): line = f"INTEGER {a}"
+                    else:                         line = f"REAL {a}"
+                    arg = parse_argument([line], "", self)
+                    assert (len(arg) == 1)
+                    self.arguments.append( arg[0] )
             # Default behavior is to NOT support implicit typing.
             # Rather, assume that fmodpy has incorrectly parsed the
             # procedure.
             else:
                 from fmodpy.exceptions import ParseError
-                raise(ParseError(f"Finished parsing {self.type}, but never declared {', '.join(argument_names)}."))
+                raise(ParseError(f"Finished parsing {self.type} {self.name}, but never declared {', '.join(argument_names)}."))
         # Remove empty interfaces.
         for i in empty_interfaces: self.interfaces.remove(i)
         # Sort the arguments in this subroutine according to their

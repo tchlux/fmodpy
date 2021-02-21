@@ -11,6 +11,7 @@ rebuild            = False
 show_warnings      = True
 debug_line_numbers = False
 implicit_typing    = False
+end_is_named       = True
 log_file           = os.devnull
 f_compiler         = 'gfortran'
 f_compiler_args    = '-fPIC -shared -O3'

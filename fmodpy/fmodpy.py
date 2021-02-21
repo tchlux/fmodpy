@@ -1,4 +1,7 @@
-# fmodpy is an automatic fortran wrapper for python.
+# --------------------------------------------------------------------
+#                              fmodpy
+# 
+#       an automatic fortran wrapper (and importer) for python.
 # 
 # This program is designed to processes a source fortran file and wrap
 # all contained code into a python module.
@@ -13,34 +16,6 @@
 #                  no arguments -> Print current configuration and return.
 #                  str, str, ... -> Remove these configurations from global config file.
 #                  key=value, ... -> Assign these configurations in global config file.
-# 
-# 
-# --------------------------------------------------------------------
-# 
-#                         DEVELOPMENT
-#                            PLANS
-# 
-# - support custom types defined in Fortran
-# --- parse the custom type and determine its contents in terms of basic types
-# --- generate a matching C struct using ctypes to the custom type
-# --- identify proper allocation schema in numpy to make sure memory
-#     maps correctly into Fortran
-# 
-# - support procedures as arguments
-# --- construct C function in Python (with ctypes) that translates C 
-#     style data into Python compatible data, calls the Python 
-#     function that was passed in as an argument, then translates the
-#     results back into C style data for return
-# --- construct a BIND(C) Fortran wrapper function that translates
-#     arguments from Fortran style into C style and calls the C 
-#     (Python) function from Fortran, nested in a MODULE with PUBLIC
-#     variables that assign the address of the C function
-# --- pass the memory address of the C function in Python to Fortran
-#     wrapper, use that address to assign a local Fortran function 
-#     in the BIND(C) wrapper module that calls Python C function
-# 
-# - extend test cases to achieve (near) 100% coverage of all lines
-# 
 # 
 # --------------------------------------------------------------------
 
@@ -169,14 +144,18 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Initialize the list of depended files if they were not given.
     if (depends_files is None): depends_files = [source_file]
+    # If a list was given then copy it (because files will be appended).
+    else: depends_files = depends_files.copy()
     # Automatically compile fortran files.
     if autocompile:
         print("Attempting to autocompile..")
-        built, failed = autocompile_files(build_dir)
-        if (len(built) > 0):  print(" succeeded:", built)
-        if (len(failed) > 0): print(" failed:   ", failed)
-        depends_files = [os.path.basename(f) for f in built] + depends_files
+        built, failed = autocompile_files(build_dir, source_file)
+        depends_files = [f for f in built if (f not in depends_files)] + depends_files
         print()
+        if (len(built) > 0):
+            print("Identified dependencies:")
+            for f in built: print(" ",os.path.basename(f))
+            print()
     # Write the wrappers to the files so they can be compiled.
     fortran_wrapper_path = os.path.join(build_dir,fortran_wrapper_file)
     python_wrapper_path = os.path.join(build_dir,python_wrapper_file)
@@ -212,10 +191,10 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     # Make the `__init__.py` for the newly created Python module a link.
     init_file = os.path.join(build_dir,"__init__.py")
     if os.path.exists(init_file): os.remove(init_file)
-    os.symlink(os.path.join(".", python_wrapper_file), init_file)
     print()
     print(f"Making symlink from '__init__.py' to '{python_wrapper_file}'")
     print()
+    os.symlink(os.path.join(".", python_wrapper_file), init_file)
     # Generate the final module path, move into location.
     final_module_path = os.path.join(output_dir, name)
     # Move the compiled module to the output directory.
@@ -223,18 +202,19 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if not (build_dir == output_dir):
         # Remove the existing wrapper module if it exists.
         if os.path.exists(final_module_path):
-            # Keep old directories as trash (TO BE REMOVED).
-            i = 1
-            prefix = "_OLD-%d"
-            while (os.path.exists(final_module_path + prefix%i)): i += 1
-            old_module_path = final_module_path + prefix%i
-            print(f" moving existing (old) module to '{old_module_path}'..")
-            shutil.move(final_module_path, old_module_path)
+            # Keep previous compilation in "old" directory.
+            old_module_path = final_module_path + "_OLD"
             # Remove old directories permanently.
-            # print(f" removing existing (outdated) copy of '{name}'..")
-            # shutil.rmtree(final_module_path)
+            if os.path.exists(old_module_path):
+                print(f" removing old wrapper of '{name}' at '{old_module_path}'..")
+                shutil.rmtree(old_module_path)
+            print(f" moving existing module to '{old_module_path}'..")
+            print("os.listdir() 1: ",os.listdir())
+            shutil.move(final_module_path, old_module_path)
+        print("os.listdir() 2: ",os.listdir())
         # Move the compiled wrapper to the destination.
         shutil.move(build_dir, final_module_path)
+        print("os.listdir() 3: ",os.listdir())
 
     print(f"\nFinished making module '{name}'.\n")
     print("^"*70)
@@ -289,7 +269,7 @@ def make_wrapper(source_file, build_dir, module_name):
 # Given a build directory (containing some fortran files), repeatedly
 # attempt to compile all files in the build directory until there are
 # no successfully compiled files.
-def autocompile_files(build_dir):
+def autocompile_files(build_dir, target_file=None):
     import os
     from fmodpy.parsing import after_dot
     # Get configuration parameters.
@@ -298,6 +278,8 @@ def autocompile_files(build_dir):
     # Try and compile the rest of the files (that might be fortran) in
     # the working directory in case any are needed for linking.
     should_compile = []
+    if (target_file is not None):
+        should_compile.append(target_file)
     print()
     # generate the list of files that we sould try to autocompile
     for f in os.listdir(build_dir):
@@ -314,6 +296,7 @@ def autocompile_files(build_dir):
         # if it does then skip it
         try:
             with open(f) as fort_file:
+                f = os.path.basename(f)
                 print(f" reading '{f}' to check if it can be autocompiled.. ", end="")
                 exclude_this_file = False
                 # Read through the file, look for exclusions
@@ -332,26 +315,48 @@ def autocompile_files(build_dir):
         should_compile.append(f)
     # Handle dependencies by doing rounds of compilation, presuming
     # only files with fewest dependencies will compile first
-    successes = [None]
-    failed = []
+    ordered_depends = []
+    successes = {None}
+    made_mod = set()
+    failed = set()
     # Get the list of existing "mod" files (Fortran module definitions).
-    current_mod_files = {f for f in os.listdir(build_dir) if after_dot(f) == "mod"}
+    current_mod_files = sum((1 for f in os.listdir(build_dir) if after_dot(f) == "mod"))
+    previous_mod_files = current_mod_files
     # Continue rounds until (everything compiled) or (no successes nor new mod files)
     print()
-    while (len(should_compile) > 0) and ((len(successes) > 0) or
-                (len(current_mod_files) > len(previous_mod_files))):
-        successes = []
+    while (len(should_compile) > 0) and (
+            (len(successes) > 0) or (len(made_mod) > 0)):
+        successes = set()
+        made_mod = set()
         for f in should_compile:
             # Try to compile all files that have "f" in the extension
             print(f"Compiling '{f}'.. ")
-            print(f" {' '.join([f_compiler]+f_compiler_args+[f])}")
-            code, stdout, stderr = run([f_compiler]+f_compiler_args+[f],cwd=build_dir)
+            cmd = [f_compiler] + f_compiler_args + \
+                  [d for d in ordered_depends if (d != f)] + [f]
+            print(f" {' '.join(cmd)}".replace(build_dir,"."))
+            code, stdout, stderr = run(cmd, cwd=build_dir)
+            # Update the list of existing mod files.
+            previous_mod_files = current_mod_files
+            current_mod_files = sum((1 for f in os.listdir(build_dir) if after_dot(f) == "mod"))
             if (code == 0):
-                successes.append(f)
+                successes.add(f)
+                if (f not in ordered_depends):
+                    ordered_depends.append(f)
                 print("  success.")
+                # If there is a target file and it has successfully
+                #  been compiled, then exit (because we are done).
+                if ((target_file is not None) and (f == target_file)):
+                    should_compile = []
+                # Since a file was successfully compiled, break, which
+                #  will trigger another attempt at compiling the
+                #  target file (if there is a target).
+                break
+            elif (current_mod_files > previous_mod_files):
+                print("  failed, but created new '.mod' file, continuing.")
+                made_mod.add(f)
             else:
                 # Record failed compilations.
-                if f not in failed: failed.append(f)
+                if (f not in failed): failed.add(f)
                 print("  failed.")
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
                 if len(stdout) > 0:
@@ -364,16 +369,18 @@ def autocompile_files(build_dir):
         # Remove the files that were successfully compiled from
         # the list of "should_compile" and the list of "failed".
         for f in successes:
-            should_compile.remove(f)
-            if f in failed: failed.remove(f)
-        # Update the list of existing mod files.
-        previous_mod_files = current_mod_files
-        current_mod_files = {f for f in os.listdir(build_dir) if after_dot(f) == "mod"}
+            if (f in failed):
+                failed.remove(f)
+            # The only way that "f" could not be in "should_compile"
+            #  is if a "target_file" was compiled successfully and
+            #  "should_compile" was overwritten with an empty list.
+            if (f not in made_mod) and (len(should_compile) > 0):
+                should_compile.remove(f)
     # Log the files that failed to compile.
     for f in should_compile: print(f"Failed to compile '{f}'.")
     # Return the list of files that were successfully compiled in
     # the order they were compiled and the files that failed to compile.
-    return successes, failed
+    return ordered_depends, failed
 
 
 # ====================================================================
@@ -444,7 +451,6 @@ def should_rebuild_module(source_path, module_name, module_directory):
     if (module_mod_time <= source_mod_time):
         sys.path.pop(0)
         return True
-    print("sys path:", sys.path)
     # If the module file is newer than the source file, try to import.
     try: importlib.import_module(module_name)
     except ImportError: return True # problem with the built module..

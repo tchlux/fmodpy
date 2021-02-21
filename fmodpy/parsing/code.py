@@ -59,9 +59,17 @@ class Code:
                 continue
             # Check to see if this is the END of this object.
             elif (line[0] == "END"):
+                # If this line only contains the keyword "END" ...
                 if (len(line) <= 1):
-                    from fmodpy.exceptions import ParseError
-                    raise(ParseError("Encountered unexpected 'END' without block type (e.g. SUBROUTINE, MODULE)."))
+                    from fmodpy.config import end_is_named
+                    if end_is_named:
+                        from fmodpy.exceptions import ParseError
+                        raise(ParseError("Encountered unexpected 'END' without block type (e.g. SUBROUTINE, MODULE)."))
+                    else:
+                        list_of_lines.pop(0)
+                        ended = True
+                        break
+                # Otherwise, check what is ending ...
                 elif (line[1] == self.type):
                     if (self.named_end):
                         if (len(line) < 3):
@@ -157,11 +165,19 @@ class Code:
                 size_prog += f"  USE {self.parent.name}\n"
                 # Add any used modules by the parent (because this has access to those).
                 for line in self.parent.uses: size_prog += f"  {line}\n"
-            # Add used modules inside this code.
-            for line in sorted(self.uses): size_prog += line+"\n"
+
+            # # If this is a TYPE, then add the type declaration.
+            # if (self.type == "TYPE"):
+            #     size_prog += "\n".join(["  " + l for l in str(self).split("\n")]) + "\n"
+
+            # If this is not a TYPE, then it might have USES statements.
+            if hasattr(self, "uses"):
+                for line in sorted(self.uses): size_prog += line+"\n"
             # Get the unique argument type:kind pairs, all arguments as values.
             unique_types_and_kinds = {}
             for arg in self.arguments:
+                # Skip "TYPE" arguments, their sizes are evaluated separately.
+                if (arg.type == "TYPE"): continue
                 # Append a unique identifier to "RESULT" for functions.
                 if (hasattr(self, "result") and (arg.name == self.name)):
                     arg.name += "_result"

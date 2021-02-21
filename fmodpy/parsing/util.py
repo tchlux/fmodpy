@@ -115,6 +115,7 @@ def pop_group(list_str, open_with="(", close_with=")"):
     else: num_open = 0
     # Search until the started group is closed.
     while (num_open > 0):
+        # TOOD: Might need to raise parsing error when this happens.
         if (len(list_str) == 0): raise(NotImplementedError)
         next_value = list_str.pop(0)
         if   (next_value == open_with):  num_open += 1

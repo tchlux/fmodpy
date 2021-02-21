@@ -59,8 +59,8 @@ def parse_function(list_of_lines, comments, parent):
 
 # Define a function for parsing a Type. Returns a list of instances
 def parse_type(list_of_lines, comments, parent):
-    from .type import Type
-    return parse_code(Type, list_of_lines, comments, parent)
+    from .type import TypeDeclaration
+    return parse_code(TypeDeclaration, list_of_lines, comments, parent)
 
 # Parse a PUBLIC line, identifying routines that are public.
 def parse_public(list_of_lines, comments, parent, keyword="PUBLIC"):
@@ -149,7 +149,9 @@ def parse_code(code, list_of_lines, comments, parent):
         warnings.warn(text+please_report_to)
     # Check for a match, if it matches complete instance initialization.
     elif (line[0] == code.type):
-        return [code(list_of_lines, comments, parent)]
+        parsed_code = code(list_of_lines, comments, parent)
+        if (parsed_code.lines > 0): return [parsed_code]
+        else:                       return []
     # No objects were found, return empty list of instances.
     return []
 
@@ -164,26 +166,37 @@ def parse_argument(list_of_lines, comments, parent):
     from .real import Real
     from .integer import Integer
     from .logical import Logical
-    for arg_type in [Real, Integer, Logical]:
+    from .type import TypeArgument
+    for arg_type in [Real, Integer, Logical, TypeArgument]:
         if (line[0] == arg_type.type):
             success = True
             break
     else: return []
-    # If there is no colon, this is not a declaration line.
-    if ":" not in line: return []
     # If an argument type was identified, then finish parsing.
     double_colon = [i for i in range(len(line)-1)
                     if line[i] == line[i+1] == ":"]
-    # If there is no "::", this is not a declaration line.
-    if (len(double_colon) == 0): return []
-    elif (len(double_colon) > 1): raise(NotImplementedError)
+    # If there is no "::", then variable names will immediately follow type(kind).
+    # TODO: This might be a parsing error, or a FortranLanguageError.
+    if (len(double_colon) > 1): raise(NotImplementedError)
+    elif (len(double_colon) == 1):
+        # There is a double colon in this line.
+        double_colon = double_colon[0]
+        base = line[:double_colon]
+        tail = line[double_colon+2:]
+    else:
+        # If there is a KIND, then include that in the base.
+        if ((len(line) > 2) and (line[1]) == '('):
+            # Check to see of there is a paranthetical group after
+            #   the arugment type (this would be for a KIND).
+            kind, tail = pop_group(line[1:], open_with="(", close_with=")")
+            base = line[0] + ["("] + kind + [")"]
+        else:
+            base = line[:1]
+            tail = line[1:]
+    # Check to make sure there are variable names after the TYPE.
+    if (len(tail) == 0): raise(NotImplementedError)        
     # Now we are guaranteed to use this line to define an argument.
     list_of_lines.pop(0)
-    # There is a double colon in this line.
-    double_colon = double_colon[0]
-    base = line[:double_colon]
-    tail = line[double_colon+2:]
-    if (len(tail) == 0): raise(NotImplementedError)        
     # Get all names from the tail (with their dimensions, if given).
     names = [tail.pop(0)]
     while (len(tail) > 0):

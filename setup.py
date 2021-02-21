@@ -14,7 +14,21 @@ DEFAULT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)),PACK
 # Convenience function for reading information files
 def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
     text = []
-    with open(os.path.join(dir_name, f_name)) as f:
+    # Check for directory existence.
+    if (not os.path.exists(dir_name)):
+        print(f"ERROR: No directory found '{dir_name}'")
+        while (not os.path.exists(dir_name)):
+            dir_name = os.path.dirname(dir_name)
+        print(f"       only found {os.listdir(dir_name)}.")
+        return ""
+    # Check for path existence.
+    path = os.path.join(dir_name, f_name)
+    if (not os.path.exists(path)):
+        print(f"ERROR: No path found '{path}'")
+        print(f"       only found {os.listdir(dir_name)}.")
+        return ""
+    # Process the contents and return.
+    with open(path) as f:
         if processed:
             for line in f:
                 line = line.strip()
@@ -22,6 +36,7 @@ def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
                     text.append(line)
         else:
             text = f.read()
+    # Return the text.
     return text
 
 if __name__ == "__main__":
@@ -49,7 +64,7 @@ if __name__ == "__main__":
             git_username=git_username, package=package, version=version),
         description = description,
         keywords = keywords,
-        python_requires = '>=2.7',
+        python_requires = '>=3.6',
         license='MIT',
         classifiers=classifiers
     )

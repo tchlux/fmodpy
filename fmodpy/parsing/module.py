@@ -30,40 +30,34 @@ class Module(Code):
             doc_lines = self.docs.strip().split("\n")
             for line in doc_lines: out += f"  {line}\n"
         # Add used modules.
-        for line in sorted(self.uses): out += "  "+line+"\n"
-        for line in sorted(self.implicit_none): out += "  "+line+"\n"
-        # Add types
-        if (len(self.types) > 0): out += "\n"
+        for line in sorted(self.uses): out += f"  {line}\n"
+        for line in sorted(self.implicit_none): out += f"  {line}\n"
+        # Add types.
         for t in self.types:
             for line in str(t).split("\n"):
-                out += "  "+line+"\n"
+                out += f"  {line}\n"
         # Add interfaces.
         if (len(self.interfaces) > 0): out += "\n"
         for i in self.interfaces:
             for line in str(i).split("\n"):
-                out += "  "+line+"\n"
+                out += f"  {line}\n"
         # Only add the space before arguments if types or
         # interfaces came before them.
         if ((max(len(self.interfaces),len(self.types)) > 0) and
             (len(self.arguments) > 0)): out += "\n"
         # Add arguments.
         for a in self.arguments:
-            if (a.type == "PROCEDURE"): continue
             out += f"  {a}\n"
-        # Only add the space before subroutines if arguments came before.
-        if (len(self.arguments) > 0): out += "\n"
         # Add subroutines.
         for obj in self.subroutines:
+            out += "\n"
             for line in str(obj).split("\n"):
                 out += f"  {line}\n"
-            out += "\n"
         # Add functions.
         for obj in self.functions:
+            out += "\n"
             for line in str(obj).split("\n"):
                 out += f"  {line}\n"
-            out += "\n"
-        # Remove the extra new line before ending the module.
-        out = out[:-1]
         # End the module.
         out += f"END {self.type} {self.name}\n"
         return out

@@ -1,3 +1,9 @@
+! This file contains a few modules, only ADDITION is relevant.
+
+MODULE NOTHING
+END MODULE NOTHING
+
+
 ! This file contains a single module ADDITION.
 MODULE CONSTANT
   REAL, PARAMETER :: C = 1.0 ! Comment should not mess this up
@@ -19,6 +25,7 @@ MODULE ADDITION
   INTEGER :: B_PUB
   REAL, DIMENSION(10) :: A_VEC_PUB
   REAL, DIMENSION(:), ALLOCATABLE :: B_VEC_PUB
+  REAL, DIMENSION(:,:), ALLOCATABLE :: C_MAT_PUB
 
 CONTAINS
 

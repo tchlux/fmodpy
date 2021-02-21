@@ -11,6 +11,7 @@ class Argument:
     kind = "" # KIND setting
     intent = "INOUT" # INTENT setting
     show_intent = True # if True then include INTENT in __str__
+    kind_prefix = "KIND=" # String that precedes kind declaration in Fortran
     allocatable = False # May be (re)allocated at runtime.
     optional = False # May be excluded from input.
     save = False # Save value between executions.
@@ -128,7 +129,8 @@ class Argument:
                 lines.append(f"{self.function_safe_name()}_DIM_{i} = {size}")
             # Copy the allocatable address only when it is present.
             if present:
-                lines.append(f"{self.function_safe_name()} = LOC({self.name}_LOCAL(1))")
+                first_pos = ",".join(["1"]*len(self.dimension))
+                lines.append(f"{self.function_safe_name()} = LOC({self.name}_LOCAL({first_pos}))")
         # Return the list of lines.
         return lines
 
@@ -447,8 +449,11 @@ class Argument:
         # Insert the declarations before the lines.
         lines = decs + lines
         # Do the assignment.
-        if (self.dimension is None): lines.append(f"{temp.name} = {self.name}")
-        else:                        lines.append(f"{temp.name} = LOC({self.name}(1))")
+        if (self.dimension is None):
+            lines.append(f"{temp.name} = {self.name}")
+        else:
+            first_pos = ",".join(["1"]*len(self.dimension))
+            lines.append(f"{temp.name} = LOC({self.name}({first_pos}))")
         # Add indentation to all lints.
         lines = ["  "+l for l in lines]
         # Add the subroutine line (with all arguments).
@@ -599,25 +604,22 @@ class Argument:
     # ----------------------------------------------------------------
     #                      Generic Methods
 
-    # Generate a copy of this argument and return it.
+    # Generate a deep copy of this argument and return it.
     def copy(self):
         arg = type(self)([self.type])
-        arg.parent = self.parent
-        arg.type = self.type
-        arg.name = self.name
-        arg.size = self.size
-        arg.kind = self.kind
-        arg.intent = self.intent
-        arg.show_intent = self.show_intent
-        arg.allocatable = self.allocatable
-        arg.optional = self.optional
-        arg.save = self.save
-        arg.value = self.value
-        arg.pointer = self.pointer
-        arg.parameter = self.parameter
-        if (self.dimension is not None):
-            arg.dimension = self.dimension.copy()
+        for attr in dir(self):
+            # Skip hidden attributes.
+            if (attr[:1] == "_"): continue
+            value = getattr(self, attr)
+            # Skip executable attributes.
+            if (hasattr(value, "__call__")): continue
+            # If this attribute has a ".copy" function, then use it.
+            if (hasattr(value, "copy") and hasattr(value.copy, "__call__")):
+                value = value.copy()
+            # Set the attribute in the new argument.
+            setattr(arg, attr, value)
         return arg
+    
 
     # Default initialization, process standard Fortran specifications.
     # Expects to be given list of strings that comes from a declaration
@@ -694,7 +696,7 @@ class Argument:
     # Print the Fortran string declaration of this argument.
     def __str__(self):
         out = f"{self.type}"
-        if (len(self.kind) > 0): out += f"(KIND={self.kind})"
+        if (len(self.kind) > 0): out += f"({self.kind_prefix}{self.kind})"
         if (self.show_intent and (len(self.intent) > 0)): out += f", INTENT({self.intent})"
         if (self.parameter): out += ", PARAMETER"
         if (self.optional): out += f", OPTIONAL"
