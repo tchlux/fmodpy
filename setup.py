@@ -9,7 +9,7 @@ except:
 
 import os
 # Go to the "about" directory in the package directory
-PACKAGE_NAME = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
+PACKAGE_NAME = "fmodpy"
 DEFAULT_DIRECTORY = os.path.join(os.path.dirname(os.path.abspath(__file__)),PACKAGE_NAME,"about")
 # Convenience function for reading information files
 def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
@@ -20,13 +20,13 @@ def read(f_name, dir_name=DEFAULT_DIRECTORY, processed=True):
         while (not os.path.exists(dir_name)):
             dir_name = os.path.dirname(dir_name)
         print(f"       only found {os.listdir(dir_name)}.")
-        return ""
+        return [""] if processed else ""
     # Check for path existence.
     path = os.path.join(dir_name, f_name)
     if (not os.path.exists(path)):
         print(f"ERROR: No path found '{path}'")
         print(f"       only found {os.listdir(dir_name)}.")
-        return ""
+        return [""] if processed else ""
     # Process the contents and return.
     with open(path) as f:
         if processed:
