@@ -20,7 +20,20 @@ class Argument:
     parameter = False # Whether this argument is a parameter (set at compile time)
     dimension = None # If array, this list describes the shape and size.
     c_types = {} # The C-types used to declare this argument (key is self.size)
+    c_types_arrays = {} # The C-types used to declare this argument as arrays.
     default_singleton = "1" # The default value assigned to a singleton.
+
+    # Properties are used to add wrapper logic around retrieving types.
+    @property
+    def c_type(self):
+        if (self.size not in self.c_types):
+            raise(NotImplementedError(f"\n\nUnrecognized size '{self.size}' for argument '{self.name}', no known corresponding C type."))
+        return self.c_types[self.size]
+    @property
+    def c_type_array(self):
+        return self.c_types_arrays.get(self.size, self.c_type)
+    @property
+    def py_type(self): return None
 
     # ----------------------------------------------------------------
     #                  Generating Fortran Wrapper
@@ -151,9 +164,6 @@ class Argument:
         # This is where output arrays whose dimensions are known can
         # be initialized. Everything else behaves normally.
         py_name = self.name.lower()
-        # Get the C type.
-        if (self.size in self.c_types): c_type = self.c_types[self.size]
-        else: raise(NotImplementedError(f"\n\nUnrecognized size '{self.size}' for argument '{self.name}', no known corresponding C type."))
         # If this is literally an optional, a boolean is required.
         if self.optional:
             lines.append(f"{py_name}_present = ctypes.c_bool(True)")
@@ -165,19 +175,22 @@ class Argument:
                 lines.append(f"    {py_name}_present = ctypes.c_bool(False)")
             # If this is a singleton, set its default value.
             if (self.dimension is None):
-                lines.append(f"    {py_name} = {c_type}()")
+                lines.append(f"    {py_name} = {self.c_type}()")
             # This has a dimension AND is allocatable.
             elif (self.allocatable):
-                lines.append(f"    {py_name} = ctypes.c_void_p()")
                 if (self.optional):
+                    default_shape = ','.join('0'*len(self.dimension))
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={self.c_type_array}, order='F')")
                     lines.append(f"elif (type({py_name}) == bool) and ({py_name}):")
+                else:
+                    lines.append(f"    {py_name} = ctypes.c_void_p()")
                 default_shape = ','.join('1'*len(self.dimension))
                 # If the size is known, then we can initialize this optional array to pass it in.
                 if (self._known_size()):
                     default_shape = ', '.join(self._default_size()).lower()
                 # Create lines for initializing the default values.
-                if (self._is_input()):
-                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
+                if (self._is_input() or self.optional):
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={self.c_type_array}, order='F')")
                 else:
                     lines.append(f"    {py_name} = ctypes.c_void_p()")
             # This has a dimension, but is NOT allocatable.
@@ -185,49 +198,47 @@ class Argument:
                 default_shape = ','.join('1'*len(self.dimension))
                 # If this is optional (not present shape is always 1).
                 if (self.optional):
-                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
+                    lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={self.c_type_array}, order='F')")
                     lines.append(f"elif (type({py_name}) == bool) and ({py_name}):")
                 # If the size is known, then we can initialize this optional array to pass it in.
                 if (self._known_size()):
                     default_shape = ', '.join(self._default_size()).lower()
                 # Create lines for initializing the default values.
-                lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={c_type}, order='F')")
+                lines.append(f"    {py_name} = numpy.zeros(shape=({default_shape}), dtype={self.c_type_array}, order='F')")
         # Convert appropriate array-inputs into Fortran compatible arrays.
-        if ((self.dimension is not None) and (self._is_input())):
+        if ((self.dimension is not None) and (self._allowed_input())):
             # Check for Fortran-continuity and data type of array inputs.
             p, s = "", "" # <- prefix, spaces
             if self._is_optional(): p, s = f"el", "  "
             lines += [f"{p}if ((not issubclass(type({py_name}), numpy.ndarray)) or",
                       f"{s}    (not numpy.asarray({py_name}).flags.f_contiguous) or",
-                      f"{s}    (not ({py_name}.dtype == numpy.dtype({c_type})))):",
+                      f"{s}    (not ({py_name}.dtype == numpy.dtype({self.c_type_array})))):",
                        "    import warnings",
-                      f"    warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{c_type}' (or equivalent). Automatically converting (probably creating a full copy).\")",
-                      f"    {py_name} = numpy.asarray({py_name}, dtype={c_type}, order='F')",]
+                      f"    warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{self.c_type_array}' (or equivalent). Automatically converting (probably creating a full copy).\")",
+                      f"    {py_name} = numpy.asarray({py_name}, dtype={self.c_type_array}, order='F')",]
         # If this is an output-only allocatable, declare a local pointer.
         elif ((not self.optional) and self._is_output() and self.allocatable):
             lines.append(f"{py_name} = ctypes.c_void_p()")
         # Otherwise this an output immutable type, declare it locally.
         elif (not self._allowed_input()):
-            lines.append(f"{py_name} = {c_type}()")
+            lines.append(f"{py_name} = {self.c_type}()")
         # This is a singleton input, convert to appropraite C type.
         elif (self._is_input() and (self.dimension is None)):
-            lines.append(f"if (type({py_name}) is not {c_type}): {py_name} = {c_type}({py_name})")
+            lines.append(f"if (type({py_name}) is not {self.c_type}): {py_name} = {self.c_type}({py_name})")
         # Define the dimension size variables if appropriate.
         if (self.dimension is not None):
             # If this object is allowed as input..
             if (self._allowed_input()):
                 # This is optional, so we need to check what to do with dimensions.
-                if ((self.optional) and (self._is_input())):
+                if (self.optional):
                     lines.append(f"if ({py_name}_present):")
                     for i in range(len(self.dimension)):
                         lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
                     lines.append("else:")
                     for i in range(len(self.dimension)):
                         lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int()")
-                # This is not input, but it is optionally allowed to be given.
-                elif (self.optional):
-                    for i in range(len(self.dimension)):
-                        lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int()")
+                    if self.allocatable:
+                        lines.append(f"{py_name} = ctypes.c_void_p({py_name}.ctypes.data)")
                 # This is not optional, so it is declared at this point, get the dimensions.
                 else:
                     for i in range(len(self.dimension)):
@@ -272,24 +283,26 @@ class Argument:
             # Compute the size of the (flattened) array.
             lines += [f"{py_name}_size = ({') * ('.join(local_dims)})"]
             shape = ','.join(local_dims[::-1])
-            c_type = self.c_types[self.size]
+            # Make a line that checks if the array should be None.
             if self.optional:
-                lines += [f"if ({py_name}_present):"]
-                # Get flat array pointer and reshape by the dimensions
-                # reversed, then transpose (f_contiguous).
-                lines += [f"    {py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({c_type}*{py_name}_size)).contents, copy=False)"]
-                # If this is a tensor, then reshape it (from C style, row major) to Fortran style.
-                if (len(self.dimension) > 1):
-                    lines += [f"    {py_name} = {py_name}.reshape({shape}).T"]
-                # Otherwise, (if not present) this output is None.
-                lines += [f"else: {py_name} = None"]
+                check_line = [f"if ({py_name}_present) and ({py_name}_size > 0):"]
             else:
-                # Get flat array pointer and reshape by the dimensions
-                # reversed, then transpose (f_contiguous).
-                lines += [f"{py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({c_type}*{py_name}_size)).contents, copy=False)"]
-                # If this is a tensor, then reshape it (from C style, row major) to Fortran style.
-                if (len(self.dimension) > 1):
-                    lines += [f"{py_name} = {py_name}.reshape({shape}).T"]
+                check_line = [f"if ({py_name}_size > 0):"]
+            lines += check_line
+            # Get flat array pointer and reshape by the dimensions
+            # reversed, then transpose (f_contiguous).
+            lines += [f"    {py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({self.c_type}*{py_name}_size)).contents, copy=False)"]
+            # If the array type does not match the singleton type, use a view.
+            if (self.c_type != self.c_type_array):
+                lines[-1] += f".view({self.c_type_array})"
+            # If this is a tensor, then reshape it (from C style, row major) to Fortran style.
+            if (len(self.dimension) > 1):
+                lines += [f"    {py_name} = {py_name}.reshape({shape}).T"]
+            # Otherwise, (if not present) this output is None.
+            lines += [f"elif ({py_name}_size == 0):",
+                      f"    {py_name} = numpy.zeros({shape}, dtype={self.c_type_array}, order='F')",
+                      f"else:",
+                      f"    {py_name} = None"]
         # Return all lines.
         return lines
 
@@ -321,10 +334,6 @@ class Argument:
         # If this is not in a MODULE, then that was unexpected.
         if ((self.parent == None) or (self.parent.type != "MODULE")):
             raise(NotImplementedError)
-        # Get the c_type of this attribute.
-        if (self.size in self.c_types):
-            c_type = self.c_types[self.size]
-        else: raise(NotImplementedError)
         # If this module attribute is allocatable, we might need to return None.
         if (self.allocatable):
             call_args.append(f'ctypes.byref({py_name}_allocated)')
@@ -338,7 +347,7 @@ class Argument:
         if (self.allocatable or (self.dimension is not None)):
             lines += [f'    {py_name} = ctypes.c_void_p()']
         else:
-            lines += [f'    {py_name} = {c_type}()']
+            lines += [f'    {py_name} = {self.c_type}()']
         call_args.append(f'ctypes.byref({py_name})')
         # Make the call to the Fortran wrapped function for getting.
         module_name = self.parent.name.lower()
@@ -354,7 +363,13 @@ class Argument:
             lines.append(f"    {py_name}_size = ({') * ('.join(local_dims)})")
             # Get flat array pointer and reshape by the dimensions
             # reversed, then transpose (f_contiguous).
-            lines.append(f"    {py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({c_type}*{py_name}_size)).contents, copy=False)")
+            lines.append(f"    if ({py_name}_size > 0):")
+            lines.append(f"        {py_name} = numpy.array(ctypes.cast({py_name}, ctypes.POINTER({self.c_type}*{py_name}_size)).contents, copy=False)")
+            # If the array type does not match the singleton type, use a view.
+            if (self.c_type != self.c_type_array):
+                lines[-1] += f".view({self.c_type_array})"
+            lines.append(f"    else:")
+            lines.append(f"        {py_name} = numpy.zeros((0,), dtype={c_type}, order='F')")
             # If this is a tensor, then reshape it to be a tensor again.
             if (len(self.dimension) > 1):
                 shape = ','.join(local_dims[::-1])
@@ -377,10 +392,6 @@ class Argument:
         # If this is not in a MODULE, then that was unexpected.
         if ((self.parent == None) or (self.parent.type != "MODULE")):
             raise(NotImplementedError)
-        # Get the c_type of this attribute.
-        if (self.size in self.c_types):
-            c_type = self.c_types[self.size]
-        else: raise(NotImplementedError)
         # Get the size if there is a dimension.
         if (self.dimension is not None):
             lines += [f"    if ((not issubclass(type({py_name}), numpy.ndarray)) or",
@@ -610,6 +621,8 @@ class Argument:
         for attr in dir(self):
             # Skip hidden attributes.
             if (attr[:1] == "_"): continue
+            # TODO: Come up with better general way to handle these special cases.
+            if (attr in {"c_type", "c_type_array", "py_type"}): continue
             value = getattr(self, attr)
             # Skip executable attributes.
             if (hasattr(value, "__call__")): continue

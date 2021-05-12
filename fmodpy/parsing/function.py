@@ -29,7 +29,7 @@ class Function(Subroutine):
         while "," in argument_names: argument_names.remove(",")
         name = declaration_line[:arg_start][-1]
         rest_of_line = declaration_line[arg_end+1:]
-        # Get 
+        # Get the result from the end of the line.
         if ("RESULT" in rest_of_line):
             if ("(" not in rest_of_line) or (")" not in rest_of_line):
                 from fmodpy.exceptions import ParseError

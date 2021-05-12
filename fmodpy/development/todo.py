@@ -45,7 +45,11 @@
 #   (i.e., a class that only defines interfaces)
 # - automatic documentation of the types of inputs in Python, included
 #   in addition to original Fortran documentation.
-# 
+# - replace names of builtings like "global" and "lambda" in the
+#   python wrapper.
+# - IMPLICIT NONE should be added to interfaces for functions
+# - integer arguments that are used as sizes should be declared before
+#   the array arguments that use them as sizes# 
 # 
 # TYPE
 # - find the definition of this Type, and all of its contents.

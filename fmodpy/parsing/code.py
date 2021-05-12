@@ -142,9 +142,15 @@ class Code:
     # Python-callable code for all contained objects in this Code.
     def generate_python(self):
         lines = []
+        type_blocks = set()
         for (_, name) in self.can_contain:
             for instance in getattr(self, name):
-                lines += instance.generate_python() + ['']
+                lines += instance.generate_python(type_blocks) + ['']
+        # Add the type declarations if there are any.
+        for block in sorted(type_blocks):
+            lines.insert(0,"")
+            for line in reversed(block.split("\n")):
+                lines.insert(0, line)
         # Return the full list of lines.
         return lines
 

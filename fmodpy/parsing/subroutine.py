@@ -268,7 +268,7 @@ class Subroutine(Code):
         return lines
 
     # Generate Python code that accesses this Subroutine.
-    def generate_python(self):
+    def generate_python(self, type_blocks):
         from fmodpy.config import fmodpy_print as print
         lines = [ '',
                   "# ----------------------------------------------",
@@ -283,6 +283,9 @@ class Subroutine(Code):
         # Cycle args (make sure the ones that are optional are listed last).
         for arg in sorted(self.arguments, key=lambda a: int(a._is_optional())):
             py_input += arg.py_input()
+            # Add the python type declaration blocks if appropriate.
+            if (arg.py_type is not None):
+                type_blocks.add(arg.py_type)
         # Declare the function and add the documentation.
         lines += [f"def {py_name}({', '.join(py_input)}):",
                   f"    '''{self.docs}'''"]

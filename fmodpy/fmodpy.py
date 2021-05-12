@@ -6,8 +6,8 @@
 # This program is designed to processes a source fortran file and wrap
 # all contained code into a python module.
 # 
-#   fimport            -- Given a path to a Fortran source file,
-#                         wrap it and return a Python module.
+#   fimport -- Given a path to a Fortran source file,
+#              wrap it and return a Python module.
 # 
 # For configuration and future usage of `fmodpy` on a single machine,
 # use the following function.
@@ -144,8 +144,10 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Initialize the list of depended files if they were not given.
     if (depends_files is None): depends_files = [source_file]
-    # If a list was given then copy it (because files will be appended).
-    else: depends_files = depends_files.copy()
+    # Given a string, assume it should be split by spaces.
+    elif (type(depends_files) is str):  depends_files = depends_files.split()
+    # If something else was given, then copy it into a list (because files will be appended).
+    else: depends_files = list(depends_files)
     # Automatically compile fortran files.
     if autocompile:
         print("Attempting to autocompile..")
@@ -157,9 +159,16 @@ def fimport(input_fortran_file, name=None, build_dir=None,
             for f in built: print(" ",os.path.basename(f))
             print()
     # Write the wrappers to the files so they can be compiled.
-    fortran_wrapper_path = os.path.join(build_dir,fortran_wrapper_file)
-    python_wrapper_path = os.path.join(build_dir,python_wrapper_file)
-    # Check for the existence of the wrapper files.
+    existing_fortran_wrapper_path = os.path.join(output_dir, name, fortran_wrapper_file)
+    fortran_wrapper_path = os.path.join(build_dir, fortran_wrapper_file)
+    existing_python_wrapper_path = os.path.join(output_dir, name, python_wrapper_file)
+    python_wrapper_path = os.path.join(build_dir, python_wrapper_file)
+    # Move the existing wrapper to the new build directory (if it is to be kept).
+    if (os.path.exists(existing_fortran_wrapper_path) and (not wrap)):
+        shutil.move(existing_fortran_wrapper_path, fortran_wrapper_path)
+    if (os.path.exists(existing_python_wrapper_path) and (not wrap)):
+        shutil.move(existing_python_wrapper_path, python_wrapper_path)
+    # Check for the existence of the wrapper files (in the build or output directories).
     fortran_wrapper_exists = os.path.exists(fortran_wrapper_path)
     python_wrapper_exists = os.path.exists(python_wrapper_path)
     # Generate the wrappers for going from python <-> fortran.
@@ -209,12 +218,9 @@ def fimport(input_fortran_file, name=None, build_dir=None,
                 print(f" removing old wrapper of '{name}' at '{old_module_path}'..")
                 shutil.rmtree(old_module_path)
             print(f" moving existing module to '{old_module_path}'..")
-            print("os.listdir() 1: ",os.listdir())
             shutil.move(final_module_path, old_module_path)
-        print("os.listdir() 2: ",os.listdir())
         # Move the compiled wrapper to the destination.
         shutil.move(build_dir, final_module_path)
-        print("os.listdir() 3: ",os.listdir())
 
     print(f"\nFinished making module '{name}'.\n")
     print("^"*70)
@@ -222,8 +228,12 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Clean up the the temporary directory if one was created.
     if temp_dir is not None:
-        temp_dir.cleanup()
-        del temp_dir
+        try:
+            temp_dir.cleanup()
+        except:
+            pass
+        finally:
+            del temp_dir
 
     # Re-configure 'fmodpy' to work the way it did before this execution.
     if (len(kwargs) > 0): load_config(**pre_config)
@@ -246,10 +256,14 @@ def make_wrapper(source_file, build_dir, module_name):
     import os
     from fmodpy.parsing import simplify_fortran_file, after_dot
     from fmodpy.parsing.file import Fortran
+
     # Make a simplified version of the fortran file that only contains
     # the relevant syntax to defining a wrapper in python.
     is_fixed_format = after_dot(source_file) == "f"
     simplified_file = simplify_fortran_file(source_file, is_fixed_format)
+    # Write the simplified file to the build directory.
+    simplified_file_path = os.path.join(build_dir, "fmodpy_simplified_"+os.path.basename(source_file))
+    with open(simplified_file_path, "w") as f: f.write("\n".join(simplified_file))
     # Parse the simplified fortran file into an abstract syntax.
     abstraction = Fortran(simplified_file)
     print("-"*70)

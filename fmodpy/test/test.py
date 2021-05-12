@@ -40,7 +40,7 @@
 
 def run_tests():
     from fmodpy.config import load_config
-    load_config(verbose=False, wrap=True, rebuild=False)
+    load_config(verbose=False, wrap=True, rebuild=True)
 
     # Import all of the tests.
     from fmodpy.test.real32 import test as test_real32

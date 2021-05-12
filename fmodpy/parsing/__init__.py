@@ -16,10 +16,10 @@ FORT_TEXT_REPLACEMENTS = {
 # Keep all comment lines and all lines from a file that start with the
 # following expressions (the file is converted to all upper case).
 ACCEPTABLE_LINE_STARTS = {'ABSTRACT', 'CHARACTER', 'END', # 'EXTERNAL',
-                          'FUNCTION', 'IMPLICIT', 'INTEGER',
-                          'INTERFACE', 'LOGICAL', 'MODULE',
+                          'INTEGER', 'LOGICAL', 'REAL', 'COMPLEX',
+                          'IMPLICIT', 'INTERFACE', 'MODULE', 'FUNCTION',
                           'OPTIONAL', 'PRIVATE', 'PROCEDURE',
-                          'PUBLIC', 'PURE', 'REAL', 'RECURSIVE',
+                          'PUBLIC', 'PURE', 'RECURSIVE',
                           'SUBROUTINE', 'TYPE', 'USE'}
 
 # Immediately exclude a file from automatic compilation if it has a
@@ -166,8 +166,9 @@ def parse_argument(list_of_lines, comments, parent):
     from .real import Real
     from .integer import Integer
     from .logical import Logical
+    from .complex import Complex
     from .type import TypeArgument
-    for arg_type in [Real, Integer, Logical, TypeArgument]:
+    for arg_type in [Real, Integer, Logical, Complex, TypeArgument]:
         if (line[0] == arg_type.type):
             success = True
             break
@@ -189,7 +190,7 @@ def parse_argument(list_of_lines, comments, parent):
             # Check to see of there is a paranthetical group after
             #   the arugment type (this would be for a KIND).
             kind, tail = pop_group(line[1:], open_with="(", close_with=")")
-            base = line[0] + ["("] + kind + [")"]
+            base = [line[0]] + ["("] + kind + [")"]
         else:
             base = line[:1]
             tail = line[1:]

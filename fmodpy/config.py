@@ -26,7 +26,9 @@ config_file        = ".fmodpy.py"
 # 
 # All of these variables should have expected types.
 BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
-                    'show_warnings', 'debug_line_numbers']
+                    'wrap', 'rebuild', 'show_warnings',
+                    'debug_line_numbers', 'implicit_typing',
+                    'end_is_named']
 LIST_CONFIG_VARS = ['f_compiler_args', 'link_omp', 'link_blas',
                     'link_lapack']
 # File related maniplation arguments
