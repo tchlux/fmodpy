@@ -268,7 +268,7 @@ class Subroutine(Code):
         return lines
 
     # Generate Python code that accesses this Subroutine.
-    def generate_python(self, type_blocks):
+    def generate_python(self, type_blocks=None):
         from fmodpy.config import fmodpy_print as print
         lines = [ '',
                   "# ----------------------------------------------",
@@ -281,14 +281,25 @@ class Subroutine(Code):
         in_module = (self.parent is not None) and (self.parent.type == "MODULE")
         if in_module: py_input.append("self")
         # Cycle args (make sure the ones that are optional are listed last).
+        all_types = set()
         for arg in sorted(self.arguments, key=lambda a: int(a._is_optional())):
             py_input += arg.py_input()
             # Add the python type declaration blocks if appropriate.
             if (arg.py_type is not None):
-                type_blocks.add(arg.py_type)
+                all_types.add(arg.py_type)
         # Declare the function and add the documentation.
         lines += [f"def {py_name}({', '.join(py_input)}):",
                   f"    '''{self.docs}'''"]
+        # If there is no parent to capture the types, make them in the subroutine.
+        if (type_blocks is None):
+            # Add lines for the types.
+            for tb in sorted(all_types):
+                lines += [""]
+                lines += ["    "+l for l in tb.split("\n")]
+        # Otherwise, add the type blocks to the parent set to be processed.
+        else:
+            for tb in all_types:
+                type_blocks.add(tb)
         # Add the declaration lines.
         py_declare = []
         for arg in self.arguments:

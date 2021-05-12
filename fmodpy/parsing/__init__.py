@@ -21,6 +21,7 @@ ACCEPTABLE_LINE_STARTS = {'ABSTRACT', 'CHARACTER', 'END', # 'EXTERNAL',
                           'OPTIONAL', 'PRIVATE', 'PROCEDURE',
                           'PUBLIC', 'PURE', 'RECURSIVE',
                           'SUBROUTINE', 'TYPE', 'USE'}
+LINE_STARTS_TO_REMOVE = {'PURE', 'RECURSIVE'}
 
 # Immediately exclude a file from automatic compilation if it has a
 # line starting with the following.
@@ -212,7 +213,7 @@ def parse_argument(list_of_lines, comments, parent):
         #  after the name. There will only be other arguments after
         #  this one if there is a "," in the line. If no "," then stop.
         elif (tail[0] == "="):
-            if ("," in tail):
+            if (("," in tail) and ("=" in tail[1:])):
                 tail = tail[tail.index(",")+1:]
             else: break
         # Finally, if it is not a comma, group, or value, it must be an argument name.

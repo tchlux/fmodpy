@@ -145,7 +145,13 @@ class Code:
         type_blocks = set()
         for (_, name) in self.can_contain:
             for instance in getattr(self, name):
-                lines += instance.generate_python(type_blocks) + ['']
+                # TODO: Find a way to generalize this pattern better,
+                #       should not need custom logic like this.
+                args = []
+                if (instance.type in {"SUBROUTINE","FUNCTION","MODULE"}):
+                    args.append(type_blocks)
+                # Get the lines of python code.
+                lines += instance.generate_python(*args) + ['']
         # Add the type declarations if there are any.
         for block in sorted(type_blocks):
             lines.insert(0,"")

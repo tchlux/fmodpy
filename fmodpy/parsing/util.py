@@ -41,7 +41,8 @@ def clean_text(text, replacements=FORT_TEXT_REPLACEMENTS):
 # Read a fortran file, store it as single lines 
 # (without leading and trailing whitespace) and return
 def simplify_fortran_file(in_file, old_fortran=False):
-    from fmodpy.parsing import ACCEPTABLE_LINE_STARTS, IMMEDIATELY_EXCLUDE
+    from fmodpy.parsing import ACCEPTABLE_LINE_STARTS, \
+        LINE_STARTS_TO_REMOVE, IMMEDIATELY_EXCLUDE
         
     with open(in_file) as f:
         fort_file = []
@@ -95,7 +96,12 @@ def simplify_fortran_file(in_file, old_fortran=False):
                         raise(FortranError(("A valid fortran python module cannot"+
                                             " contain '%s'.")%(line[0])))
                     # Store the line if it was acceptable.
-                    if acceptable: fort_file.append( " ".join(line) )
+                    if acceptable:
+                        # Remove line starts that can be ignored safely.
+                        while ((len(line) > 0) and (line[0] in LINE_STARTS_TO_REMOVE)):
+                            line.pop(0)
+                        # Add the line to the simplified Fortran file.
+                        fort_file.append( " ".join(line) )
                     curr_line = ""
     return fort_file
 

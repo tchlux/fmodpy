@@ -104,7 +104,7 @@ class Module(Code):
         return lines
 
     # Generate Python code.
-    def generate_python(self):
+    def generate_python(self, *args):
         # Add access points for the contained subroutines and functions.
         lines = [ '',
                  f'class {self.name.lower()}:',
@@ -123,7 +123,7 @@ class Module(Code):
         # Generate static methods for all internal routines.
         for code in self.subroutines + self.functions:
             lines += ['']
-            lines += ['    '+l for l in code.generate_python()]
+            lines += ['    '+l for l in code.generate_python(*args)]
         # Replace the class definition with a single instance of the class.
         lines += [ "",
                   f"{self.name.lower()} = {self.name.lower()}()"]
