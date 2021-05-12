@@ -228,12 +228,9 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Clean up the the temporary directory if one was created.
     if temp_dir is not None:
-        try:
-            temp_dir.cleanup()
-        except:
-            pass
-        finally:
-            del temp_dir
+        try: temp_dir.cleanup()
+        except FileNotFoundError: pass
+        del temp_dir
 
     # Re-configure 'fmodpy' to work the way it did before this execution.
     if (len(kwargs) > 0): load_config(**pre_config)
