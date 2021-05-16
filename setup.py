@@ -5,7 +5,7 @@ class DependencyError(Exception): pass
 try: 
     from setuptools import setup, find_packages
 except:
-    raise(DependencyError("Missing python package 'setuptools'.\n  pip install --user setuptools"))
+    raise(DependencyError("Missing python package 'setuptools'.\n  python3 -m pip install --user setuptools"))
 
 import os
 # Go to the "about" directory in the package directory
@@ -51,21 +51,19 @@ if __name__ == "__main__":
     name, email, git_username = read("author.txt")
 
     setup(
-        author = name,
-        author_email = email,
+        author=name,
+        author_email=email,
         name=package,
         packages=find_packages(exclude=[]),
         include_package_data=True,
         install_requires=requirements,
         version=version,
-        url = 'https://github.com/{git_username}/{package}'.format(
-            git_username=git_username, package=package),
-        download_url = 'https://github.com/{git_username}/{package}/archive/{version}.tar.gz'.format(
-            git_username=git_username, package=package, version=version),
+        url = f"https://github.com/{git_username}/{package}",
+        download_url = f"https://github.com/{git_username}/{package}/archive/{version}.tar.gz",
         description = description,
         keywords = keywords,
-        python_requires = '>=3.6',
-        license='MIT',
+        python_requires = ">=3.6",
+        license="MIT",
         classifiers=classifiers
     )
 
