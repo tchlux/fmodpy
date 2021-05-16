@@ -1,5 +1,3 @@
-# Linking with -lgfortran does not work on standard Ubuntu environment.
-# Default working directory should be a temporary directory.
 # "util" should perform compilation of fortran codes in setup, saving requires admin privaleges.
 # Passed functions store python functions associated with random integer
 #   identifier, that is used to look up correct function in cython.
