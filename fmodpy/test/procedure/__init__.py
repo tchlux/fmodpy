@@ -1,6 +1,5 @@
 
 
-def test():
 # Standardized testing interface.
 def test():
     import os

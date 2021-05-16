@@ -285,7 +285,7 @@ def autocompile_files(build_dir, target_file=None):
     from fmodpy.parsing import after_dot
     # Get configuration parameters.
     from fmodpy.config import run, f_compiler, f_compiler_args, \
-        GET_SIZE_PROG_FILE
+        GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
     # Try and compile the rest of the files (that might be fortran) in
     # the working directory in case any are needed for linking.
     should_compile = []
@@ -340,9 +340,11 @@ def autocompile_files(build_dir, target_file=None):
         successes = set()
         made_mod = set()
         for f in should_compile:
-            # Try to compile all files that have "f" in the extension
+            # Try to compile all files that have "f" in the extension.
             print(f"Compiling '{f}'.. ")
-            cmd = [f_compiler] + f_compiler_args + \
+            # Reuse the "GET_SIZE_EXEC_FILE" name for compilation checks.
+            compiled_file_path = os.path.join(build_dir, GET_SIZE_EXEC_FILE)
+            cmd = [f_compiler] + f_compiler_args + ["-o", compiled_file_path] + \
                   [d for d in ordered_depends if (d != f)] + [f]
             print(f" {' '.join(cmd)}".replace(build_dir,"."))
             code, stdout, stderr = run(cmd, cwd=build_dir)

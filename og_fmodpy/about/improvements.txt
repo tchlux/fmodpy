@@ -1,7 +1,0 @@
-- [ ] Add python interface for permanently changing default compilation options.
-
-- [ ] Make intermediate fortran subroutine that passes assumed
-      shapes back into C (for passing subroutines as arguments when 
-      the subroutines have assumed shape arrays).
-
-- [ ] Add support for fortran data types (structs in C).

@@ -1,6 +1,0 @@
-- [ ] Make sure fortran argument names do not conflict with reserved
-      words in python, if they do, then add a reserved-word prefix
-
-- [ ] If multiple files containing same-named subroutines exist in the
-      source fortran file directory then the autocompile_extra_files
-      option will cause multiple-declaration linking errors.
