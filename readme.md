@@ -23,7 +23,7 @@ Python, allowing for a productive and exciting development pipeline.
 
 ## INSTALLATION:
 
-    $ pip install fmodpy
+    $ python3 -m pip install fmodpy
 
   This code expects that you already have a Fortran compiler
   installed. By default most machines do not have a Fortran compiler
@@ -62,13 +62,13 @@ module = fmodpy.fimport("<fortran source file>")
 
   Run `fmodpy` from the command line with:
 
-    $ python -m fmodpy <fortran source file> [<setting1>=<value1>] [<setting2>=<value2] ...
+    $ python3 -m fmodpy <fortran source file> [<setting1>=<value1>] [<setting2>=<value2] ...
 
   The result will be a directory containing a Python package that
   wraps and calls the underlying Fortran code.
 
   Execute with no arguments to get help documentation. For a list of
-  the different configuration options, run the command `python -c
+  the different configuration options, run the command `python3 -c
   "import fmodpy; fmodpy.configure()"`. 
 
 
@@ -95,11 +95,6 @@ module = fmodpy.fimport("<fortran source file>")
   `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input.)
 
 
-## VERSION HISTORY:
-
-  See [this file](fmodpy/about/version_history.txt).
-
-
 ## UPCOMING:
 
   This module is undergoing a major code re-base. The interface should
@@ -110,7 +105,7 @@ module = fmodpy.fimport("<fortran source file>")
  - custom `TYPE` in Fortran (and arrays of that type)
  - passing a `PROCEDURE` as an argument to Fortran code
 
-  This work is ongoing and the goal is to complete it before the end of 2020.
+  This work is ongoing and the goal is to complete it by the end of ~~2020~~ 2021.
 
 
 ## EXAMPLE CODE
