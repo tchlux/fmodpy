@@ -51,7 +51,7 @@ import fmodpy
 # Compile and import the Fortran code. (This will automatically
 #  recompile the module if the Fortran source has been saved 
 #  more recently than the last time the module was imported.)
-module = fmodpy.fimport("<fortran source file>")
+module = fmodpy.fimport("<path to fortran source file>")
 ```
 
   For more details, see the `help(fmodpy.fimport)` documentation.

@@ -396,10 +396,10 @@ class Argument:
         if (self.dimension is not None):
             lines += [f"    if ((not issubclass(type({py_name}), numpy.ndarray)) or",
                       f"        (not numpy.asarray({py_name}).flags.f_contiguous) or",
-                      f"        (not ({py_name}.dtype == numpy.dtype({c_type})))):",
+                      f"        (not ({py_name}.dtype == numpy.dtype({self.c_type})))):",
                        "        import warnings",
-                      f"        warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{c_type}' (or equivalent). Automatically converting (probably creating a full copy).\")",
-                      f"        {py_name} = numpy.asarray({py_name}, dtype={c_type}, order='F')",]
+                      f"        warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{self.c_type}' (or equivalent). Automatically converting (probably creating a full copy).\")",
+                      f"        {py_name} = numpy.asarray({py_name}, dtype={self.c_type}, order='F')",]
             # Store all the sizes.
             for i in range(len(self.dimension)):
                 dim_name = f'{py_name}_dim_{i+1}'
@@ -409,7 +409,7 @@ class Argument:
             call_args.append(f'ctypes.c_void_p({py_name}.ctypes.data)')
         else:
             # Initialize correct c_type version of value.
-            lines.append(f'    {py_name} = {c_type}({py_name})')
+            lines.append(f'    {py_name} = {self.c_type}({py_name})')
             # Call passing in all arguments (might include sizes).
             call_args.append(f'ctypes.byref({py_name})')
         module_name = self.parent.name.lower()
