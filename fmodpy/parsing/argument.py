@@ -369,7 +369,7 @@ class Argument:
             if (self.c_type != self.c_type_array):
                 lines[-1] += f".view({self.c_type_array})"
             lines.append(f"    else:")
-            lines.append(f"        {py_name} = numpy.zeros((0,), dtype={c_type}, order='F')")
+            lines.append(f"        {py_name} = numpy.zeros((0,), dtype={self.c_type}, order='F')")
             # If this is a tensor, then reshape it to be a tensor again.
             if (len(self.dimension) > 1):
                 shape = ','.join(local_dims[::-1])
