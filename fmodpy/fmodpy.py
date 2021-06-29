@@ -95,6 +95,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     source_path = os.path.abspath(input_fortran_file)
     source_file = os.path.basename(source_path)
     source_dir = os.path.dirname(source_path)
+    
 
     # If the name is not defined, then try to automatically produce it.
     if (name is None): name = before_dot(source_file)
@@ -110,6 +111,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Set the default output directory
     if (output_dir is None): output_dir = os.getcwd()
+    else:                    output_dir = os.path.abspath(output_dir)
 
     # Determine whether or not the module needs to be rebuilt.
     should_rebuild = rebuild or should_rebuild_module(
@@ -208,7 +210,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     final_module_path = os.path.join(output_dir, name)
     # Move the compiled module to the output directory.
     print("Moving from:", f"  {build_dir}", "to", f"  {final_module_path}", sep="\n")
-    if not (build_dir == output_dir):
+    if not (build_dir == final_module_path):
         # Remove the existing wrapper module if it exists.
         if os.path.exists(final_module_path):
             # Keep previous compilation in "old" directory.
@@ -237,6 +239,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # (Re)Import the module.
     sys.path.insert(0, output_dir)
+    print(sys.path)
     module = importlib.import_module(name)
     module = importlib.reload(module)
     sys.path.pop(0)

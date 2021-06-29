@@ -1,4 +1,4 @@
-from fmodpy.parsing import FORT_TEXT_REPLACEMENTS
+from fmodpy.parsing import FORT_TEXT_REPLACEMENTS, FORT_TEXT_FIXES
 
 # Short functions.
 #   identifying the strings before and after the last "."
@@ -29,14 +29,19 @@ def wrap_long_lines(list_of_lines, max_len=132):
     return list_of_lines
 
 # Function for efficiently performing a series of replacements on a line of text
-def clean_text(text, replacements=FORT_TEXT_REPLACEMENTS):
+def clean_text(text, replacements=FORT_TEXT_REPLACEMENTS, fixes=FORT_TEXT_FIXES):
     import re
     # Create a proper reg-exp dictionary of replacements
-    rep = {re.escape(k):v for (k,v) in replacements.items()}
+    replacements = {re.escape(k):v for (k,v) in replacements.items()}
     # Generate a regular expression pattern with that dictionary
-    pattern = re.compile("|".join(rep.keys()))
+    pattern = re.compile("|".join(replacements.keys()))
     # Perform the replacement using python reg-exp search
-    return pattern.sub(lambda m: rep[re.escape(m.group(0))], text)
+    cleaned_file = pattern.sub(lambda m: replacements[re.escape(m.group(0))], text)
+    # Now repeat the above steps undoing any broken elements.
+    fixes = {re.escape(k):v for (k,v) in fixes.items()}
+    pattern = re.compile("|".join(fixes.keys()))
+    fixed_file = pattern.sub(lambda m: fixes[re.escape(m.group(0))], cleaned_file)
+    return fixed_file
 
 # Read a fortran file, store it as single lines 
 # (without leading and trailing whitespace) and return

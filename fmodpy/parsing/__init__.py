@@ -13,6 +13,12 @@ FORT_TEXT_REPLACEMENTS = {
     "/":" / ",
     "=":" = ",
 }
+
+# Some spaces that were created above were misplaced, so this fixes them.
+FORT_TEXT_FIXES = {
+    "= >":"=>",
+}
+
 # Keep all comment lines and all lines from a file that start with the
 # following expressions (the file is converted to all upper case).
 ACCEPTABLE_LINE_STARTS = {'ABSTRACT', 'CHARACTER', 'END', # 'EXTERNAL',
