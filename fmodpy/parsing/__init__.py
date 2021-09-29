@@ -173,9 +173,10 @@ def parse_argument(list_of_lines, comments, parent):
     from .real import Real
     from .integer import Integer
     from .logical import Logical
+    from .character import Character
     from .complex import Complex
     from .type import TypeArgument
-    for arg_type in [Real, Integer, Logical, Complex, TypeArgument]:
+    for arg_type in [Real, Integer, Logical, Character, Complex, TypeArgument]:
         if (line[0] == arg_type.type):
             success = True
             break

@@ -158,13 +158,6 @@ def load_config(**kwargs):
             from fmodpy.exceptions import IllegalConfiguration
             raise(IllegalConfiguration(f"The variable '{var}' is supposed to be a bool or string, but is neither."))
 
-    # If 'omp' is True, then add OpenMP compilation and link arguments
-    # to the list of arguments already.
-    if config["omp"]:
-        for l in config["link_omp"]:
-            if (l not in config["f_compiler_args"]):
-                config["f_compiler_args"] += [l]
-
     # If 'lblas' is True, then add BLAS compilation and
     # link arguments to the list of arguments already.
     if config["blas"]:
@@ -176,6 +169,13 @@ def load_config(**kwargs):
     # link arguments to the list of arguments already.
     if config["lapack"]:
         for l in config["link_lapack"]:
+            if (l not in config["f_compiler_args"]):
+                config["f_compiler_args"] += [l]
+
+    # If 'omp' is True, then add OpenMP compilation and link arguments
+    # to the list of arguments already.
+    if config["omp"]:
+        for l in config["link_omp"]:
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
 

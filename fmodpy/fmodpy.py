@@ -394,6 +394,10 @@ def autocompile_files(build_dir, target_file=None):
                 should_compile.remove(f)
     # Log the files that failed to compile.
     for f in should_compile: print(f"Failed to compile '{f}'.")
+    # Raise an error if there was a target file and it was not compiled.
+    if (target_file is not None) and (target_file in failed):
+        from fmodpy.exceptions import CompileError
+        raise(CompileError(f"Failed to compile target file '{target_file}'.\n  Current compilation arguments are:\n    {f_compiler_args}\n  Is a necessary compilation argument for this file or a dependency missing?"))
     # Return the list of files that were successfully compiled in
     # the order they were compiled and the files that failed to compile.
     return ordered_depends, failed

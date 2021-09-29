@@ -300,7 +300,7 @@ class Argument:
                 lines += [f"    {py_name} = {py_name}.reshape({shape}).T"]
             # Otherwise, (if not present) this output is None.
             lines += [f"elif ({py_name}_size == 0):",
-                      f"    {py_name} = numpy.zeros({shape}, dtype={self.c_type_array}, order='F')",
+                      f"    {py_name} = numpy.zeros(shape=({shape}), dtype={self.c_type_array}, order='F')",
                       f"else:",
                       f"    {py_name} = None"]
         # Return all lines.

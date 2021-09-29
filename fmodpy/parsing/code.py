@@ -210,6 +210,10 @@ class Code:
                 size_prog += f"  WRITE (*,*) SIZEOF({name})\n"
             # End the program file.
             size_prog += "END PROGRAM GET_SIZE\n"
+            # Take the size program string and make sure all lines 
+            #  fit within the expected character width.
+            from fmodpy.parsing.util import wrap_long_lines
+            size_prog = "\n".join(wrap_long_lines(size_prog.split("\n")))
             # Import some necessary configurations to make the SIZEOF program.
             from fmodpy.config import run, f_compiler, \
                 GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE

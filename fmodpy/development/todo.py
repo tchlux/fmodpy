@@ -29,6 +29,16 @@
 #                            TODO LISTS
 # 
 # FMODPY
+# - Create WARNING for when link files are "not found" in compiled
+#   projects, asking if the links are still alive.
+# - Make __init__.py the source file and the _python_wrapper.py the
+#   link file, so that projects put on GitHub will work better.
+# - Write a code that "recovers links" instituted by GitHub, insert
+#   that into the generated fmodpy wrappers.
+# - Create an archive of the source files when the wrapper was originally
+#   built, so that those can be recovered even if the links are lost.
+# - add option to continue wrapping on failures, and to simply skip
+#   wrappers for the things that cannot be wrapped (when possible)
 # - assign implicit_typing to True and named_end to False for '.f' files
 # - assign correct shape (from shape[0] ...) for implicit array arguments
 # - check the memory contiguity of OPTIONAL input arrays 
@@ -45,11 +55,12 @@
 #   (i.e., a class that only defines interfaces)
 # - automatic documentation of the types of inputs in Python, included
 #   in addition to original Fortran documentation.
-# - replace names of builtings like "global" and "lambda" in the
-#   python wrapper.
+# - replace names of builtins like "global" and "lambda" in the
+#   python wrapper (when the original Fortran uses these names).
 # - IMPLICIT NONE should be added to interfaces for functions
 # - integer arguments that are used as sizes should be declared before
-#   the array arguments that use them as sizes# 
+#   the array arguments that use them as sizes, regardless of their
+#   order in the actual list of arguments
 # 
 # TYPE
 # - find the definition of this Type, and all of its contents.
