@@ -43,6 +43,7 @@ def run_tests():
     load_config(verbose=False, wrap=True, rebuild=True)
 
     # Import all of the tests.
+    from fmodpy.test.character import test as test_character
     from fmodpy.test.real32 import test as test_real32
     from fmodpy.test.real64 import test as test_real64
     from fmodpy.test.double_precision import test as test_double_precision
@@ -50,8 +51,11 @@ def run_tests():
     from fmodpy.test.int64 import test as test_int64
     from fmodpy.test.logical import test as test_logical
     from fmodpy.test.module import test as test_module
+    from fmodpy.test.complex64 import test as test_complex64
+    from fmodpy.test.complex128 import test as test_complex128
 
     # Run all of the tests.
+    # test_character()
     test_real32()
     test_real64()
     test_double_precision()
@@ -59,6 +63,8 @@ def run_tests():
     test_int64()
     test_logical()
     test_module()
+    test_complex64()
+    test_complex128()
 
 
 if __name__ == "__main__":

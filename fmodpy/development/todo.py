@@ -10,6 +10,11 @@
 #     maps correctly into Fortran
 # 
 # - support procedures as arguments
+# --- create a registry of "fmodpy wrapped functions" with the memory
+#     addresses of all functions wrapped by fmodpy
+# --- map the memory address to the actual function in the Fortran
+#     wrapper
+# 
 # --- construct C function in Python (with ctypes) that translates C 
 #     style data into Python compatible data, calls the Python 
 #     function that was passed in as an argument, then translates the

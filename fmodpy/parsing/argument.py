@@ -563,11 +563,12 @@ class Argument:
     # from the assumed size of the object in Fortran.
     def _default_size(self):
         if (len(self._dimension_args()) != 0): raise(NotImplementedError)
+        import re # <- use regular expressions to capture SIZE(...) syntax.
         sizes = []
         for size in self.dimension:
             size = size.lower().replace(" ","")
-            # Replace all occurrences of "SIZE(<arg>, <component>)"
-            # with equivalent NumPy array syntax.
+            # Replace all occurrences of "SIZE(<argument>)"
+            #   with a Python NumPy equivalent array syntax.
             while "size(" in size:
                 start_index = size.index("size(") + len("size(")
                 before_call = size[:start_index-len("size(")]
@@ -578,13 +579,32 @@ class Argument:
                     if parens <= 0: break
                 argument = size[start_index:index]
                 after_call = size[index+len(")"):]
-                if "," not in argument:
+                # Now "argument" contains whatever was inside the parenthesis
+                #  and passed into the `SIZE(...)` function in Fortran.
+                argument = argument.strip()
+                # If this is just a reference to a variable name...
+                if (re.match(r"^\w+$", argument) is not None):
                     func_replacement = f"{argument}.size"
-                else:
+                # If this is formatted as "<variable name>, <integer>", get that dimension..
+                elif (re.match(r"^\w+,\s*\d+$", argument) is not None):
                     name = argument[:argument.index(",")]
                     dim = argument[argument.index(",")+1:]
                     dim = str(int(dim) - 1)
                     func_replacement = f"{name}.shape[{dim}]"
+                # If this is formatted as "<variable name>(<slice>[,<slice>])", translate the slice(s)..
+                elif (re.match(r"^\w+[(]\s*(:|[\w]+)\s*(,\s*(:|[\w]+)\s*)*[)]$", argument) is not None):
+                    name = argument[:argument.index("(")]
+                    slices = argument[argument.index("(")+1:argument.index(")")].split(",")
+                    for i in range(len(slices)):
+                        if (slices[i].strip() == ":"): continue
+                        try:
+                            slices[i] = str(int(slices[i])-1)
+                        except ValueError:
+                            slices[i] += "-1"
+                    func_replacement = f"{name}[{','.join(slices)}].size"
+                # Otherwise, the contents of `SIZE(...)` cannot be parsed successfully.
+                else:
+                    raise(NotImplementedError("The contents of 'SIZE' could not be parsed successfully. If this is valid Fortran syntax, consider raising an issue with a minimum necessary example from this code.\n\n  "+size))
                 # Replace float division with integer division in python.
                 size = before_call + func_replacement + after_call
             # Append this NumPy size.
