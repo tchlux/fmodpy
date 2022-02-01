@@ -13,13 +13,17 @@ def test():
     # ---------------------------------------------------------------
     # Begin specific testing code.
 
+    import ctypes
     import numpy as np
-    a = np.array(['1', '0', '1', '0', '1', '0', '1', '0'], dtype='uint8', order='F')
-    temp = np.asarray(a, dtype='uint8', order='F')
-    out = temp.copy()
-    print(fort.test_simple_character(temp, b=out, c=False))
-    assert(all(out == fort.test_simple_character(temp, b=out, c=False)))
-    assert(not any(fort.test_simple_character(temp, b=out, c=True)))
+    a = np.array(list(map(ord,['1', '0', '1', '0', '1', '0', '1', '0'])),
+                 dtype=ctypes.c_char, order='F')
+    out = a.copy()
+    # Check for successful copy.
+    result = fort.test_simple_character(a, b=out, c=ord('1'))
+    assert(all(result.view('uint8') == a.view('uint8')))
+    # Check for successful overwrite.
+    result = fort.test_simple_character(a, b=out, c=ord('0'))
+    assert(all(result.view('uint8') == [1, 2, 0, 1, 2, 0, 1, 2]))
 
     # End specific testing code.
     # ---------------------------------------------------------------

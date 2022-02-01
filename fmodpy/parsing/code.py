@@ -41,16 +41,23 @@ class Code:
         from fmodpy.config import fmodpy_print as print
         print(f"{self.type.title()}.parse {self.name}")
         # Extract documentation first.
-        while (len(list_of_lines) > 0) and (list_of_lines[0].strip()[:1] == "!"):
-            self.docs += "\n" + list_of_lines.pop(0)
+        while (len(list_of_lines) > 0):
+            stripped_line = list_of_lines[0].strip() + '!'
+            if (stripped_line[0] == '!'):
+                self.docs += "\n" + list_of_lines.pop(0)
+            # If this is not a comment line, the docs are done.
+            else: break
+        # Strip off any whitespace from the edges of the docs.
         self.docs = self.docs.strip()
+        # Strip off all empty comment lines from the end of the comment block.
+        while (self.docs[-2:] == "\n!"): self.docs = self.docs[:-2]
         # Parse the rest of the file (popping out lines from list).
         ended = False
         comments = ""
         while (len(list_of_lines) > 0):
             line = list_of_lines[0].strip().split()
             if len(line) == 0:
-                comments = ""
+                comments = "" # empty new lines before something indicate no comment connection
                 list_of_lines.pop(0)
                 continue
             # Check if this is a comment (line should not be empty).
@@ -147,6 +154,8 @@ class Code:
             for instance in getattr(self, name):
                 # TODO: Find a way to generalize this pattern better,
                 #       should not need custom logic like this.
+                #       Right now it collects types from all children
+                #       then adds those type definitions to self.
                 args = []
                 if (instance.type in {"SUBROUTINE","FUNCTION","MODULE"}):
                     args.append(type_blocks)

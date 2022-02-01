@@ -53,9 +53,10 @@ def run_tests():
     from fmodpy.test.module import test as test_module
     from fmodpy.test.complex64 import test as test_complex64
     from fmodpy.test.complex128 import test as test_complex128
+    from fmodpy.test.type import test as test_type
 
     # Run all of the tests.
-    # test_character()
+    test_character()
     test_real32()
     test_real64()
     test_double_precision()
@@ -65,6 +66,7 @@ def run_tests():
     test_module()
     test_complex64()
     test_complex128()
+    test_type()
 
 
 if __name__ == "__main__":

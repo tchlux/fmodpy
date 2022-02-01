@@ -1,9 +1,9 @@
-MODULE TYPES
-  TYPE T1
+MODULE FTYPES
+  TYPE, BIND(C) :: T1
      INTEGER :: A
      REAL :: B
   END TYPE T1
-END MODULE TYPES
+END MODULE FTYPES
 
 ! Test Fortran REAL wrapping and usage from Python with fmodpy.
 
@@ -14,19 +14,19 @@ SUBROUTINE TEST_STANDARD(SING_IN, SING_OUT, ARRAY_IN, ARRAY_OUT,&
   ! array inputs with known and unknown size, optional inputs, and
   ! optional outputs. 
   IMPLICIT NONE
-  TYPE T1
+  TYPE, BIND(C) :: T2
      INTEGER :: A
      REAL :: B
-  END TYPE T1
+  END TYPE T2
   ! Argument definitions.
-  TYPE(T1), INTENT(IN) :: SING_IN
-  TYPE(T1), INTENT(OUT) :: SING_OUT
-  TYPE(T1), DIMENSION(:), INTENT(IN) :: ARRAY_IN
-  TYPE(T1), DIMENSION(:), INTENT(OUT) :: ARRAY_OUT
-  TYPE(T1), DIMENSION(SIZE(ARRAY_OUT)), INTENT(OUT) :: KNOWN_ARRAY_OUT
-  TYPE(T1), DIMENSION(3,SIZE(ARRAY_OUT)), INTENT(OUT) :: KNOWN_MATRIX_OUT
-  TYPE(T1), INTENT(IN), OPTIONAL :: OPT_SING_IN
-  TYPE(T1), INTENT(OUT), OPTIONAL :: OPT_SING_OUT
+  TYPE(T2), INTENT(IN) :: SING_IN
+  TYPE(T2), INTENT(OUT) :: SING_OUT
+  TYPE(T2), DIMENSION(:), INTENT(IN) :: ARRAY_IN
+  TYPE(T2), DIMENSION(:), INTENT(OUT) :: ARRAY_OUT
+  TYPE(T2), DIMENSION(SIZE(ARRAY_OUT)), INTENT(OUT) :: KNOWN_ARRAY_OUT
+  TYPE(T2), DIMENSION(3,SIZE(ARRAY_OUT)), INTENT(OUT) :: KNOWN_MATRIX_OUT
+  TYPE(T2), INTENT(IN), OPTIONAL :: OPT_SING_IN
+  TYPE(T2), INTENT(OUT), OPTIONAL :: OPT_SING_OUT
   ! Local variable.
   INTEGER :: I
   ! Copy the single input value to the single output value.
@@ -69,7 +69,7 @@ FUNCTION TEST_EXTENDED(OPT_ARRAY_IN, KNOWN_OPT_ARRAY_OUT,&
   ! Test the extended functionaly of the 'TYPE(T1)' type and its
   ! interoperability with Python. This includes, optional array
   ! inputs, optional array outputs, and allocatable array outputs.
-  USE TYPES, ONLY: T1
+  USE FTYPES, ONLY: T1
   IMPLICIT NONE
   TYPE(T1), INTENT(IN), OPTIONAL, DIMENSION(:) :: OPT_ARRAY_IN
   TYPE(T1), INTENT(OUT), OPTIONAL :: KNOWN_OPT_ARRAY_OUT(3)

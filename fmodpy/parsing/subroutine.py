@@ -176,6 +176,9 @@ class Subroutine(Code):
         if (in_module): lines += [f"  USE {self.parent.name}, ONLY: {self.name}"]
         # Enforce no implicit typing (within this code).
         lines += [f"  IMPLICIT NONE"]
+        # Add all type definitions.
+        for t in self.types:
+            lines += ["  " + l for l in t.fort_declare()]
         # Add all argument declarations.
         for arg in self.arguments:
             lines += ["  " + l for l in arg.fort_declare()]
@@ -192,6 +195,9 @@ class Subroutine(Code):
             # Need to define the interface to the actual function
             # being called (if this is not part of a module).
             if (not in_module):
+                # Force this routine to have IMPLICIT NONE for interface definition.
+                self.implicit_none = ["IMPLICIT NONE"]
+                # Add the interface definition of this routine.
                 lines += ["    "+l for l in str(self).split("\n")]
             lines += ["  END INTERFACE",'']
         # Add all argument preparation code.
@@ -280,26 +286,62 @@ class Subroutine(Code):
         # If this is in a module, then the first attribute will be "self".
         in_module = (self.parent is not None) and (self.parent.type == "MODULE")
         if in_module: py_input.append("self")
+        # If there is no parent to capture the types, make them in the subroutine.
+        type_lines = []
+        if (type_blocks is None):
+            # Cycle through and create all type declarations where necessary.
+            for t in self.types:
+                type_lines += t.py_declare()
+        # Otherwise, add the type blocks to the parent set to be processed.
+        else:
+            for t in self.types:
+                type_blocks.add("\n".join(t.py_declare()))
         # Cycle args (make sure the ones that are optional are listed last).
-        all_types = set()
         for arg in sorted(self.arguments, key=lambda a: int(a._is_optional())):
             py_input += arg.py_input()
-            # Add the python type declaration blocks if appropriate.
-            if (arg.py_type is not None):
-                all_types.add(arg.py_type)
+            # Add the python type declaration blocks for complex if appropriate.
+            # TODO: `complex` type definition should be stored in `self.types`
+            #       instead of being stored in the 'py_type' attribute for
+            #       an argument. The Argument should not define the type.
+            arg_py_type = arg.py_type
+            if (arg_py_type is not None):
+                # Add lines for the complex type before this routine.
+                if (type_blocks is None):
+                    lines += [""]
+                    lines += ["    "+l for l in arg_py_type.split("\n")]
+                # Add lines for this complex type to the parent.
+                else:
+                    type_blocks.add(arg_py_type)
         # Declare the function and add the documentation.
         lines += [f"def {py_name}({', '.join(py_input)}):",
                   f"    '''{self.docs}'''"]
-        # If there is no parent to capture the types, make them in the subroutine.
-        if (type_blocks is None):
-            # Add lines for the types.
-            for tb in sorted(all_types):
-                lines += [""]
-                lines += ["    "+l for l in tb.split("\n")]
-        # Otherwise, add the type blocks to the parent set to be processed.
-        else:
-            for tb in all_types:
-                type_blocks.add(tb)
+        # Import any types that are imported in the corresponding fortran.
+        known_types = {t.name for t in self.types}
+        needed_types = {a.kind for a in self.arguments if a.type == "TYPE"
+                        and a.kind not in known_types}
+        #   extract types directly from referenced modules that should be wrapped
+        for l in self.uses:
+            type_names = l.split()
+            type_names.pop(0)
+            class_name = type_names.pop(0).lower()
+            if (':' in type_names):
+                type_names = type_names[type_names.index(':')+1:]
+            to_pop = set()
+            for t in sorted(needed_types):
+                if t in type_names:
+                    to_pop.add(t)
+                    lines += [f"    {t} = {class_name}.{t}"]
+            needed_types -= to_pop
+        # Check for errors (needed types must be explicitly imported).
+        if (len(needed_types) > 0):
+            from fmodpy.exceptions import NotSupportedError
+            raise(NotSupportedError(
+                f"\nArguments for routine '{self.name}' were derived TYPE, but the type was not explicitly imported." +
+                f"\nAll derived types must either be defined in the subroutine where they are used, or explicitly imported from a wrapped module."
+            ))
+        # Declare any internal types if they could not be put in the parent.
+        if (len(type_lines) > 0):
+            lines += ['    '+l for l in type_lines]
         # Add the declaration lines.
         py_declare = []
         for arg in self.arguments:

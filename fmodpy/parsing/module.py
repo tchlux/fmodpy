@@ -109,6 +109,9 @@ class Module(Code):
         lines = [ '',
                  f'class {self.name.lower()}:',
                  f"    '''{self.docs}'''"]
+        # Generate internal types.
+        for t in self.types:
+            lines += [ "    "+l for l in t.py_declare()]
         # Generate getter and setter for arguments.
         for arg in self.arguments:
             py_name = arg.name.lower()

@@ -8,7 +8,7 @@ SUBROUTINE TEST_SIMPLE_CHARACTER(A,C,B)
   B(:) = 'A'
   DO I = 1, SIZE(B)
      IF (PRESENT(C) .AND. (C .EQ. '1')) THEN
-        B(I) = 'F'
+        B(I) = A(I)
      ELSE
         B(I) = CHAR(MOD(I,3))
      END IF

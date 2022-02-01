@@ -256,6 +256,7 @@ def make_wrapper(source_file, build_dir, module_name):
     import os
     from fmodpy.parsing import simplify_fortran_file, after_dot
     from fmodpy.parsing.file import Fortran
+    from fmodpy.exceptions import ParseError
 
     # Make a simplified version of the fortran file that only contains
     # the relevant syntax to defining a wrapper in python.
@@ -265,7 +266,13 @@ def make_wrapper(source_file, build_dir, module_name):
     simplified_file_path = os.path.join(build_dir, "fmodpy_simplified_"+os.path.basename(source_file))
     with open(simplified_file_path, "w") as f: f.write("\n".join(simplified_file))
     # Parse the simplified fortran file into an abstract syntax.
-    abstraction = Fortran(simplified_file)
+    try:
+        abstraction = Fortran(simplified_file)
+    except ParseError as exc:
+        from fmodpy.config import end_is_named
+        if (is_fixed_format and (not end_is_named)):
+            print("\nWARNING: Encountered unnamed 'END' in source for a fixed format file. Consider setting 'end_is_named=False' configuration when wrapping this file.\n")
+        raise(exc)
     print("-"*70)
     print(abstraction)
     print("-"*70)
