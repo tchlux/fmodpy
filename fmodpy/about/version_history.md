@@ -7,3 +7,4 @@
 | 1.3.2<br>June 2021 | Adding ability to parse Fortran files with renamed <br> types. |
 | 1.3.3<br>September 2021 | Fixed numerous minor bugs and typos. Added basic <br> support for characters, as long as they have no <br> length. |
 | 1.3.4<br>October 2021 | Refactored parsing of SIZE(...) in assumed shape <br> array allocation during wrapping. Now supports <br> slightly more complicated arguments to the SIZE <br> function. |
+| 1.4.0<br>January 2022 | Updated documentation parsing to not clear comments <br> on new lines after subroutine definition. Fixed <br> character array tests. Added basic support for <br> Fortran derived types as long as they are BIND(C) <br> already. |
