@@ -13,6 +13,16 @@ code as easy to import and use as native Python. This combines the
 performance of Fortran with the convenience and accessibility of
 Python, allowing for a productive and exciting development pipeline.
 
+This package is compiler independent. The generated wrappers are 
+self contained, written purely in Python, and are immediately sharable
+to any other POSIX platform with a Fortran compiler installed. The only
+python dependency is `numpy` (no need to hassle with installing `cython`).
+After generating the python wrapper module, even `fmodpy` itself is no longer 
+a dependency! This makes `fmodpy` particularly suitable to writing and sharing
+performant mathematical software with a broader audience, since
+complex dependencies can often be difficult to configure on cutting
+edge high performance computing platforms.
+
 
 ## INSTALLATION:
 
@@ -65,6 +75,24 @@ module = fmodpy.fimport("<path to fortran source file>")
   "import fmodpy; fmodpy.configure()"`. 
 
 
+## SUPPORTED FORTRAN:
+
+ - `INTEGER` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
+ - `REAL` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
+ - `CHARACTER` singletons and assumed-shape arrays, but *no* support for `LEN` behaviors
+ - `COMPLEX` 64 and 128 bit, (allocatable / assumed shape) arrays, optionals
+ - `LOGICAL`  singletons, (allocatable / assumed shape) arrays, optionals
+ - `TYPE` singletons, (allocatable / assumed shape) arrays, and optionals (type must have `BIND(C)` attribute)
+ - `SUBROUTINE` standard behaviors (automatically drops `PURE` and `RECURSIVE` prefixes)
+ - `FUNCTION` standard behaviors (wrapped with a standard subroutine call)
+ - `MODULE` wrapper that behaves like an instantiated Python class with property-based accessors for internal attributes
+
+It is a goal to eventually allow for the following:
+ - passing a `PROCEDURE` as an argument to Fortran code
+
+This code base is entirely driven by concrete examples and use-cases. If you want to see something supported that is not currently, please consider posting a minimum example of the Fortran code you'd like to wrap under the [Issues](https://github.com/tchlux/fmodpy/issues) page.
+
+
 ## HOW IT WORKS:
 
   Reads the fortran file, abstracting out the modules, subroutines,
@@ -73,7 +101,7 @@ module = fmodpy.fimport("<path to fortran source file>")
   to generate a Fortran wrapper with `BIND(C)` enabled, as well as a
   matching Python wrapper using `ctypes` to pass data from Python into
   the Fortran wrapper. The constructed Python wrapper contains
-  compilation settings will automatically recompile a shared object
+  compilation settings that will automatically recompile a shared object
   file containing the underlying original Fortran source code. 
   Overall, the call sequence at runtime looks like:
 
@@ -87,21 +115,6 @@ module = fmodpy.fimport("<path to fortran source file>")
   the interface for each subroutine / function should behave. (I.e.,
   `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input.)
 
-
-## SUPPORTED FORTRAN:
-
- - `INTEGER` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
- - `REAL` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
- - `CHARACTER` singletons and assumed-shape arrays, but *no* support for `LEN` behaviors
- - `COMPLEX` 64 and 128 bit, (allocatable / assumed shape) arrays, optionals
- - `LOGICAL`  singletons, (allocatable / assumed shape) arrays, optionals
- - `TYPE` singletons, (allocatable / assumed shape) arrays, and optionals (type must have `BIND(C)` attribute)
- - `MODULE` wrapper that behaves like an instantiated Python class with property-based accessors for internal attributes
-
-It is a goal to eventually allow for the following:
- - passing a `PROCEDURE` as an argument to Fortran code
-
-This code base is entirely driven by concrete examples and use-cases. If you want to see something supported that is not currently, please consider posting a minimum example of the Fortran code you'd like to wrap under the [Issues](https://github.com/tchlux/fmodpy/issues) page.
 
 ## EXAMPLE CODE
 
