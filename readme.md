@@ -14,13 +14,6 @@ performance of Fortran with the convenience and accessibility of
 Python, allowing for a productive and exciting development pipeline.
 
 
-## IMPORTANT NOTICE (December 2020)
-
-  This code is currently undergoing a significant revision. Any tagged
-  versions should be considered stable, but the master branch (this
-  repository in its current form) is not guaranteed to be stable.
-  
-
 ## INSTALLATION:
 
     $ python3 -m pip install fmodpy
@@ -95,18 +88,20 @@ module = fmodpy.fimport("<path to fortran source file>")
   `INTENT(IN)` does not return, `INTENT(OUT)` is optional as input.)
 
 
-## UPCOMING:
+## SUPPORTED FORTRAN:
 
-  This module is undergoing a major code re-base. The interface should
-  remain (almost) identical, however some redundant or poorly named
-  arguments may be removed or renamed. The changes will allow for the
-  following features that are **not** currently supported:
+ - `INTEGER` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
+ - `REAL` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
+ - `CHARACTER` singletons and assumed-shape arrays, but *no* support for `LEN` behaviors
+ - `COMPLEX` 64 and 128 bit, (allocatable / assumed shape) arrays, optionals
+ - `LOGICAL`  singletons, (allocatable / assumed shape) arrays, optionals
+ - `TYPE` singletons, (allocatable / assumed shape) arrays, and optionals (type must have `BIND(C)` attribute)
+ - `MODULE` wrapper that behaves like an instantiated Python class with property-based accessors for internal attributes
 
- - custom `TYPE` in Fortran (and arrays of that type)
+It is a goal to eventually allow for the following:
  - passing a `PROCEDURE` as an argument to Fortran code
 
-  This work is ongoing and the goal is to complete it by the end of ~~2020~~ 2021.
-
+This code base is entirely driven by concrete examples and use-cases. If you want to see something supported that is not currently, please consider posting a minimum example of the Fortran code you'd like to wrap under the [Issues](https://github.com/tchlux/fmodpy/issues) page.
 
 ## EXAMPLE CODE
 
