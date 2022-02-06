@@ -174,6 +174,23 @@ class Subroutine(Code):
         # Check if this is in a module.
         in_module = (self.parent is not None) and (self.parent.type == "MODULE")
         if (in_module): lines += [f"  USE {self.parent.name}, ONLY: {self.name}"]
+        # Add any type definitions from parents that are used here.
+        known_types = {t.name for t in self.types}
+        for l in self.uses:
+            if (":" not in l): continue
+            known_types |= {n.strip() for n in l.split(":")[-1].split(",")}
+        needed_types = set()
+        for a in self.arguments:
+            if ((a.type == "TYPE") and (a.kind not in known_types)):
+                needed_types.add(a.kind)
+        # Assume that all needed types are in the parent.
+        if (len(needed_types) > 0):
+            parent_types = set()
+            for t in self.parent.types:
+                if (t.name in needed_types):
+                    parent_types.add(t.name)
+                    needed_types.remove(t.name)
+            lines += [f"  USE {self.parent.name}, ONLY: {', '.join(sorted(parent_types))}"]
         # Enforce no implicit typing (within this code).
         lines += [f"  IMPLICIT NONE"]
         # Add all type definitions.
@@ -317,8 +334,9 @@ class Subroutine(Code):
                   f"    '''{self.docs}'''"]
         # Import any types that are imported in the corresponding fortran.
         known_types = {t.name for t in self.types}
-        needed_types = {a.kind for a in self.arguments if a.type == "TYPE"
-                        and a.kind not in known_types}
+        get_type_kind = lambda arg: arg.kind.split("(")[0].strip()
+        needed_types = {get_type_kind(a) for a in self.arguments if a.type == "TYPE"
+                        and get_type_kind(a) not in known_types}
         #   extract types directly from referenced modules that should be wrapped
         for l in self.uses:
             type_names = l.split()
@@ -332,6 +350,14 @@ class Subroutine(Code):
                     to_pop.add(t)
                     lines += [f"    {t} = {class_name}.{t}"]
             needed_types -= to_pop
+        #   extract types directly from the possible chain of code's parents
+        p = self.parent
+        while (p is not None):
+            temp_py_name = p.name.lower()
+            for t in getattr(p, "types", []):
+                needed_types -= {getattr(t, "name", "")}
+                lines += [f"    {t.name} = {temp_py_name}.{t.name}"]
+            p = getattr(p, "parent", None)
         # Check for errors (needed types must be explicitly imported).
         if (len(needed_types) > 0):
             from fmodpy.exceptions import NotSupportedError

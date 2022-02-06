@@ -18,6 +18,8 @@ class Argument:
     value = False # Pass by value, not by reference.
     pointer = False # Pass by pointer, not by reference.
     parameter = False # Whether this argument is a parameter (set at compile time)
+    type_len = False # Whether this argument has the LEN parameter (in a derived TYPE)
+    type_kind = False # Whether this argument has the KIND parameter (in a derived TYPE)
     dimension = None # If array, this list describes the shape and size.
     c_types = {} # The C-types used to declare this argument (key is self.size)
     c_types_arrays = {} # The C-types used to declare this argument as arrays.
@@ -316,7 +318,8 @@ class Argument:
             py_name = self.name.lower()
             value = py_name
             # Retrieve the Python "value" of the C object if appropriate.
-            if (self.dimension is None): value += ".value"
+            if (self.dimension is None) and (self.type != "TYPE"):
+                value += ".value"
             # Return None for missing optional returns.
             if self.optional: names.append(f"({value} if {py_name}_present else None)")
             else:             names.append(f"{value}")
@@ -722,6 +725,14 @@ class Argument:
                 line.pop(0)
                 import warnings
                 warnings.warn("fmodpy.parsing.argument: Ignoring 'EXTERNAL' status of argument.")
+            # Read LEN attribute (for inside of TYPE declarations)
+            elif (line[0] == "LEN"):
+                line.pop(0)
+                self.type_len = True
+            # Read KIND attribute (for inside of TYPE declarations)
+            elif (line[0] == "KIND"):
+                line.pop(0)
+                self.type_kind = True
             # Otherwise, this is an unrecognized argument.
             else:
                 raise(NotImplementedError(f"\n\nUnrecognized part of Argument '{line[0]}'.\n"))
@@ -731,6 +742,8 @@ class Argument:
         out = f"{self.type}"
         if (len(self.kind) > 0): out += f"({self.kind_prefix}{self.kind})"
         if (self.show_intent and (len(self.intent) > 0)): out += f", INTENT({self.intent})"
+        if (self.type_len): out += ", LEN"
+        if (self.type_kind): out += ", KIND"
         if (self.parameter): out += ", PARAMETER"
         if (self.optional): out += f", OPTIONAL"
         if (self.allocatable): out += f", ALLOCATABLE"

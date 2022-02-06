@@ -1,3 +1,15 @@
+
+# Custom types:
+#   - read in the "arguments" for the type, those are the sizes
+#   - allow "LEN" arguments
+#   - prohibit "KIND" arguments
+#   - define a "struct generator" in python that creates a struct
+#     of the same shape as in Fortran given the same arguments
+#   - check for "issubclass" instead of exact type match for structs
+#   
+
+
+
 # --------------------------------------------------------------------
 # 
 #                         DEVELOPMENT

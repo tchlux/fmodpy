@@ -67,7 +67,7 @@ from fmodpy.config import fmodpy_print as print
 def fimport(input_fortran_file, name=None, build_dir=None,
             output_dir=None, depends_files=None, **kwargs):
     # Import parsing functions.
-    from fmodpy.parsing import before_dot, legal_module_name
+    from fmodpy.parsing import after_dot, before_dot, legal_module_name
     from fmodpy.config import run, load_config, \
         FORT_WRAPPER_EXT, PYTHON_WRAPPER_EXT, PY_EXT
     # Import "os" for os operations and "importlib" for importing a module.
@@ -78,7 +78,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (len(kwargs) > 0): load_config(**kwargs) # <- assigns given configuration
     # Import some locally used settings.
     from fmodpy.config import wrap, rebuild, autocompile, \
-        f_compiler, f_compiler_args
+        f_compiler, f_compiler_args, delete_destination
 
     # Print the configuration (when verbose).
     print()
@@ -203,7 +203,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     init_file = os.path.join(build_dir,"__init__.py")
     if os.path.exists(init_file): os.remove(init_file)
     print()
-    print(f"Making symlink from '__init__.py' to '{python_wrapper_file}'")
+    print(f"Making symlink from '{python_wrapper_file}' to '__init__.py'")
     print()
     os.symlink(os.path.join(".", python_wrapper_file), init_file)
     # Generate the final module path, move into location.
@@ -213,16 +213,27 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if not (build_dir == final_module_path):
         # Remove the existing wrapper module if it exists.
         if os.path.exists(final_module_path):
-            # Keep previous compilation in "old" directory.
-            old_module_path = final_module_path + "_OLD"
-            # Remove old directories permanently.
-            if os.path.exists(old_module_path):
-                print(f" removing old wrapper of '{name}' at '{old_module_path}'..")
-                shutil.rmtree(old_module_path)
-            print(f" moving existing module to '{old_module_path}'..")
-            shutil.move(final_module_path, old_module_path)
+            if (delete_destination):
+                print(f" deleting existing directory at '{final_module_path}'..")
+                shutil.rmtree(final_module_path)
+            else:
+                # Keep previous compilation in "old" directory.
+                old_module_path = final_module_path + "_OLD"
+                # Remove old directories permanently.
+                if os.path.exists(old_module_path):
+                    print(f" removing old wrapper of '{name}' at '{old_module_path}'..")
+                    shutil.rmtree(old_module_path)
+                print(f" moving existing directory at '{final_module_path}' to '{old_module_path}'..")
+                shutil.move(final_module_path, old_module_path)
         # Move the compiled wrapper to the destination.
         shutil.move(build_dir, final_module_path)
+        # Remove all files (symlinks) that are not dependencies.
+        all_kept_files = set(depends_files) | {fortran_wrapper_file, python_wrapper_file, "__init__.py"}
+        for p in os.listdir(final_module_path):
+            if ((p not in all_kept_files) and (after_dot(p) != 'mod')):
+                print(f" removing unnecessary file '{p}'..")
+                p = os.path.join(final_module_path, p)
+                os.remove(p)
 
     print(f"\nFinished making module '{name}'.\n")
     print("^"*70)
@@ -239,7 +250,6 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # (Re)Import the module.
     sys.path.insert(0, output_dir)
-    print(sys.path)
     module = importlib.import_module(name)
     module = importlib.reload(module)
     sys.path.pop(0)
@@ -377,6 +387,8 @@ def autocompile_files(build_dir, target_file=None):
             elif (current_mod_files > previous_mod_files):
                 print("  failed, but created new '.mod' file, continuing.")
                 made_mod.add(f)
+                if (f not in ordered_depends):
+                    ordered_depends.append(f)
             else:
                 # Record failed compilations.
                 if (f not in failed): failed.add(f)
@@ -535,4 +547,6 @@ def configure(*to_delete, **to_save):
             print("", file=f)
             print("# ",time.ctime(), file=f)
             for name in sorted(to_save):
-                print(f"{name} = {str([to_save[name]])[1:-1]}", file=f)
+                value = to_save[name]
+                str_value = str([to_save[name]])[1:-1]
+                print(f"{name} = {str_value}", file=f)

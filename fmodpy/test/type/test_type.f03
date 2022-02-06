@@ -1,8 +1,27 @@
 MODULE FTYPES
+  TYPE, BIND(C) :: SIZE_TYPE
+     INTEGER :: N
+  END TYPE SIZE_TYPE
+
   TYPE, BIND(C) :: T1
      INTEGER :: A
      REAL :: B
   END TYPE T1
+
+  TYPE, BIND(C) :: T2
+     INTEGER :: A
+     REAL :: B
+  END TYPE T2
+
+CONTAINS
+
+  SUBROUTINE COPY_T1_TO_T2(A, B)
+    TYPE(T1), INTENT(IN) :: A
+    TYPE(T2), INTENT(OUT) :: B
+    B%A = A%A
+    B%B = A%B
+  END SUBROUTINE COPY_T1_TO_T2
+
 END MODULE FTYPES
 
 ! Test Fortran REAL wrapping and usage from Python with fmodpy.

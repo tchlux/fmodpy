@@ -10,14 +10,10 @@ STRUCTURE_DEFINITION = '''
 class {name}(ctypes.Structure):
     # (name, ctype) fields for this structure.
     _fields_ = [{fields}]
-    # Define an "__init__" that can take a complex number as input.
+    # Define an "__init__" that can take a class or keyword arguments as input.
     def __init__(self, value={default}, **kwargs):
         # From whatever object (or dictionary) was given, assign internal values.
         {field_declarations}
-    # Define a "value" so that it can be cleanly retreived as a single complex number.
-    @property
-    def value(self):
-        return self
 '''
 
 
@@ -38,10 +34,43 @@ class TypeDeclaration(Code):
             raise NotSupportedError(f"\n  Fortran derived types must be C compatible and include 'BIND(C)' to be wrapped.\n  Encountered this issue when parsing the following line:\n    {list_of_lines[0]}")
         # Parse the name of this subroutine out of the argument list.
         declaration_line = list_of_lines.pop(0).strip().split()
-        self.name = declaration_line[-1]
+        assert (':' in declaration_line), "Expected ':' to exist in TYPE declaration line:\n  {' '.join(declaration_line)}"
+        colon_index = -declaration_line[::-1].index(':')-1
+        declaration_line = declaration_line[colon_index+1:]
+        # Extract any "arguments" to the type.
+        argument_names = set()
+        #   Assume the format "TYPE :: name"
+        #                  or "TYPE :: name(arg1, arg2, ...)"
+        if ('(' in declaration_line):
+            self.name = declaration_line.pop(0)
+            argument_names = {
+                token for token in declaration_line
+                if token not in {'(', ',', ')'}
+            }
+        else:
+            self.name = declaration_line[-1]
         # ------- Default parsing operations -------
         super().parse(list_of_lines)
         # ------------------------------------------
+        # Disable showing "INTENT" on all arguments of this TYPE.
+        for arg in self.arguments:
+            arg.show_intent = False
+        # Verify that all arguments are defined and permissable.
+        if (len(argument_names) > 0):
+            for arg in self.arguments:
+                if (arg.name in argument_names):
+                    if (arg.type_kind):
+                        from fmodpy.exceptions import NotSupportedError
+                        raise(NotSupportedError(
+                            "\nDerived types with KIND parameters are not supported yet."+
+                            "\n  Consider posting a simplified example with your motivation to"+
+                            "\n  https://github.com/tchlux/fmodpy/issues"
+                        ))
+                    elif (not arg.type_len):
+                        raise(NotImplemented())
+                    argument_names.remove(arg.name)
+            assert (len(argument_names) == 0), f'TYPE arguments {argument_names} were not defined within the type.'
+
 
     # Declare the lines that create the corresponding Struct for this type.
     # TODO: Treat the type like it is a c function being called, include
@@ -67,8 +96,14 @@ class TypeDeclaration(Code):
         return str(self).split("\n")
 
     def __str__(self):
-        # Begin type.
-        out = f"{self.type}, BIND(C) :: {self.name}\n" 
+        # Define the arguments to the type (for constructing its internals).
+        type_args = [a.name for a in self.arguments if a.type_len]
+        if (len(type_args) > 0):
+            args = f"(" + ", ".join(type_args) + ")"
+        else:
+            args = ""
+        # Define the type.
+        out = f"{self.type}, BIND(C) :: {self.name}{args}\n" 
         # Add arguments.
         for a in self.arguments:
             temp = a.copy()

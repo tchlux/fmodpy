@@ -14,6 +14,10 @@ def test():
     # ---------------------------------------------------------------
     # Begin specific testing code.
 
+    t1 = fort.ftypes.T1()
+    t2 = fort.ftypes.copy_t1_to_t2(t1)
+    assert((t1.A == t2.A) and (t1.B == t2.B))
+
     import numpy as np
     n = 10
     array_in = np.asarray(np.arange(n), dtype=fort.ftypes.T1, order='F')

@@ -12,6 +12,7 @@ show_warnings      = True
 debug_line_numbers = False
 implicit_typing    = False
 end_is_named       = True
+delete_destination = False # hard-delete destination directory if it already exists
 log_file           = os.devnull
 f_compiler         = 'gfortran'
 f_compiler_args    = '-fPIC -shared -O3'
@@ -28,7 +29,7 @@ config_file        = ".fmodpy.py"
 BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
                     'wrap', 'rebuild', 'show_warnings',
                     'debug_line_numbers', 'implicit_typing',
-                    'end_is_named']
+                    'end_is_named', 'delete_destination']
 LIST_CONFIG_VARS = ['f_compiler_args', 'link_omp', 'link_blas',
                     'link_lapack']
 # File related maniplation arguments
