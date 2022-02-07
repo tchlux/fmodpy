@@ -83,9 +83,9 @@ class TypeDeclaration(Code):
         struct = STRUCTURE_DEFINITION.format(
             name = name,
             default = STRUCT_DEFAULT_VALUE,
-            fields = ", ".join([CONTENTS_DECLARATION.format(n=n, t=t)
+            fields = ", ".join([CONTENTS_DECLARATION.format(n=n.lower(), t=t)
                                 for (n,t) in zip(names, types)]),
-            field_declarations = "\n        ".join([FIELD_DECLARATION.format(n=n)
+            field_declarations = "\n        ".join([FIELD_DECLARATION.format(n=n.lower())
                                                     for n in names])
         )
         # Return the list of lines that defines this struct.
