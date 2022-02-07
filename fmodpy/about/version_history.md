@@ -9,3 +9,4 @@
 | 1.3.4<br>October 2021 | Refactored parsing of SIZE(...) in assumed shape <br> array allocation during wrapping. Now supports <br> slightly more complicated arguments to the SIZE <br> function. |
 | 1.4.0<br>January 2022 | Updated documentation parsing to not clear comments <br> on new lines after subroutine definition. Fixed <br> character array tests. Added basic support for <br> Fortran derived types as long as they are BIND(C) <br> already. |
 | 1.4.1<br>February 2022 | Fixed usability bugs with derived types, added final <br> directory cleaning, fixed bug in module dependencies <br> that relied on .mod file, found bug in gfortran when <br> trying to support parameterized types. |
+| 1.4.2<br>February 2022 | Derived type struct fields in Python are lower case <br> to match python-wrapped behaviors in the rest of the <br> package. |
