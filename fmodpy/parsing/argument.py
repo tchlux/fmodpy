@@ -178,6 +178,8 @@ class Argument:
             # If this is a singleton, set its default value.
             if (self.dimension is None):
                 lines.append(f"    {py_name} = {self.c_type}()")
+                lines.append(f"else:")
+                lines.append(f"    {py_name} = {self.c_type}({py_name})")
             # This has a dimension AND is allocatable.
             elif (self.allocatable):
                 if (self.optional):

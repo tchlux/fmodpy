@@ -189,7 +189,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
         # Fill all the missing components of the python_wrapper string.
         python_wrapper = python_wrapper.format(
             f_compiler = f_compiler,
-            shared_object_name = name + ".so",
+            shared_object_name = name,
             f_compiler_args = str(f_compiler_args),
             dependencies = depends_files
         )
@@ -301,11 +301,13 @@ def make_wrapper(source_file, build_dir, module_name):
 # attempt to compile all files in the build directory until there are
 # no successfully compiled files.
 def autocompile_files(build_dir, target_file=None):
-    import os
+    import os, time
     from fmodpy.parsing import after_dot
     # Get configuration parameters.
     from fmodpy.config import run, f_compiler, f_compiler_args, \
-        GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
+        wait_warning_sec, GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
+    wait_warning_sec = int(wait_warning_sec)
+    start_time = time.time()
     # Try and compile the rest of the files (that might be fortran) in
     # the working directory in case any are needed for linking.
     should_compile = []
@@ -360,6 +362,14 @@ def autocompile_files(build_dir, target_file=None):
         successes = set()
         made_mod = set()
         for f in should_compile:
+            # Check to see if compilation is taking unexpectedly long.
+            if (time.time()-start_time > wait_warning_sec):
+                import warnings
+                warnings.warn("\n  Automatic compilation is taking longer than expected, consider"+
+                              "\n  providing explicitly ordered dependencies (precompiled or not) with"+
+                              "\n    fmodpy.fimport('<target>', depends_files=['<path>', ...], ...)\n")
+                start_time = float('inf') # <- do this to prevent further warnings
+
             # Try to compile all files that have "f" in the extension.
             print(f"Compiling '{f}'.. ")
             # Reuse the "GET_SIZE_EXEC_FILE" name for compilation checks.
@@ -393,13 +403,20 @@ def autocompile_files(build_dir, target_file=None):
                 # Record failed compilations.
                 if (f not in failed): failed.add(f)
                 print("  failed.")
+                print("NAME:", target_file, f)
+                
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
                 if len(stdout) > 0:
                     print("STANDARD OUTPUT:")
                     print("\n".join(stdout))
                 if len(stderr) > 0:
+                    stderr_str = "\n".join(stderr)
                     print("STANDARD ERROR:")
-                    print("\n".join(stderr))
+                    print(stderr_str)
+                    # If there is a pure "error" in the target file, raise it.
+                    if ("\nError:" in stderr_str) and (f == target_file):
+                        from fmodpy.exceptions import CompileError
+                        raise CompileError(f"Failed to compile '{target_file}' with error:\n\n{stderr_str}")
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
         # Remove the files that were successfully compiled from
         # the list of "should_compile" and the list of "failed".

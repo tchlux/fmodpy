@@ -234,6 +234,15 @@ class Subroutine(Code):
         else: call_start = "CALL"
         # Generate the calling code recursively when there are optionals.
         if (len(optional_args) > 0):
+            # Warn the user if there are a lot of optional arguments.
+            if (len(optional_args) > 10):
+                import warnings
+                warnings.warn("\nfmodpy [Subroutine.generate_fortran]:\n"+
+                             f" '{self.name}' has {len(optional_args)} OPTIONAL arguments, which\n"+
+                             f"  means the wrapper will have 2^{len(optional_args)} = {2**len(optional_args)}\n"+
+                              "  IF .. ELSE .. ENDIF statements to handle all combinations.\n"+
+                              "  Consider reducing the number of OPTIONAL arguments, or be prepared\n"+
+                              "  for a large wrapper file and long compilation times.")
             # If there are any optionals, assign all arguments
             # literally in the call to Fortran (because the ordering
             # could be off after accounting for presence).

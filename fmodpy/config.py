@@ -21,6 +21,7 @@ link_blas          = '-lblas'
 link_lapack        = '-lblas -llapack'
 home_directory     = os.path.expanduser("~")
 config_file        = ".fmodpy.py"
+wait_warning_sec   = 5 # number of seconds to wait before warning about automatic compilation
 
 # --------------------------------------------------------------------
 #      Development globals, not intended to be changed by users.
