@@ -2,7 +2,7 @@ from .argument import Argument
 
 class Logical(Argument):
     type = "LOGICAL"
-    c_types = {"4":"ctypes.c_bool"}
+    c_types = {"4":"ctypes.c_int", "1":"ctypes.c_bool"}
     default_singleton = "0"
 
     # Add a warning about logical arrays.

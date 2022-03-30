@@ -13,13 +13,16 @@ def test():
     # ---------------------------------------------------------------
     # Begin specific testing code.
 
+    import ctypes
     import numpy as np
-    a = np.array([True, False, True, False, True, False, True, False], dtype=bool)
-    temp = np.asarray(a, dtype='int32')
-    out = temp.copy()
-    assert(all(out == fort.test_simple_logical(temp, b=out, c=False)))
-    assert(not any(fort.test_simple_logical(temp, b=out, c=True)))
-
+    a = np.array([True, False, True, False, True, False, True, False], dtype="int32")
+    out = a.copy().astype(ctypes.c_bool)
+    # Construct the answers (that are expected).
+    b12 = np.array([(i+1)%3 == 0 for i in range(len(a))])
+    b3  = np.array([(i+1)%2 == 0 for i in range(len(a))])
+    assert(all(b12 == fort.test_simple_logical(a, b=out)))
+    assert(all(b12 == fort.test_simple_logical(a, b=out, c=False)))
+    assert(all(b3  == fort.test_simple_logical(a, b=out, c=True)))
     # End specific testing code.
     # ---------------------------------------------------------------
     print("passed", flush=True)
