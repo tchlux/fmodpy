@@ -11,3 +11,4 @@
 | 1.4.1<br>February 2022 | Fixed usability bugs with derived types, added final <br> directory cleaning, fixed bug in module dependencies <br> that relied on .mod file, found bug in gfortran when <br> trying to support parameterized types. |
 | 1.4.2<br>February 2022 | Derived type struct fields in Python are lower case <br> to match python-wrapped behaviors in the rest of the <br> package. |
 | 1.4.3<br>March 2022 | Added warnings for long compilation, many optional <br> arguments, and included architecture in compiled <br> file names. |
+| 1.4.3<br>March 2022 | Logical byte size adjustment from 03-27 that <br> supports C-bool types with only one byte. |
