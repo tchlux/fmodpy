@@ -94,7 +94,7 @@ class Argument:
         if (self.dimension is not None):
             og_dimension = self.dimension[:]
             for i in range(len(self.dimension)):
-                lines.append(f"INTEGER, INTENT({size_type}) :: {self.name}_DIM_{i+1}")
+                lines.append(f"INTEGER(KIND=SELECTED_INT_KIND(18)), INTENT({size_type}) :: {self.name}_DIM_{i+1}")
                 # If this is allocatable, the dimension cannot be assumed on input.
                 if self.allocatable: self.dimension[i] = ":"
                 else: self.dimension[i] = f"{self.name}_DIM_{i+1}"
@@ -237,20 +237,20 @@ class Argument:
                 if (self.optional):
                     lines.append(f"if ({py_name}_present):")
                     for i in range(len(self.dimension)):
-                        lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
+                        lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_long({py_name}.shape[{i}])")
                     lines.append("else:")
                     for i in range(len(self.dimension)):
-                        lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_int()")
+                        lines.append(f"    {py_name}_dim_{i+1} = ctypes.c_long()")
                     if self.allocatable:
                         lines.append(f"{py_name} = ctypes.c_void_p({py_name}.ctypes.data)")
                 # This is not optional, so it is declared at this point, get the dimensions.
                 else:
                     for i in range(len(self.dimension)):
-                        lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int({py_name}.shape[{i}])")
+                        lines.append(f"{py_name}_dim_{i+1} = ctypes.c_long({py_name}.shape[{i}])")
             # This array is output, initialize dimension memory locations.
             else:
                 for i in range(len(self.dimension)):
-                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_int()")
+                    lines.append(f"{py_name}_dim_{i+1} = ctypes.c_long()")
         # Return lines of declaration code.
         return lines
 
@@ -346,7 +346,7 @@ class Argument:
         # Define the dimension size variables if appropriate.
         if (self.dimension is not None):
             for i in range(len(self.dimension)):
-                lines.append(f'    {py_name}_dim_{i+1} = ctypes.c_int()')
+                lines.append(f'    {py_name}_dim_{i+1} = ctypes.c_long()')
                 call_args.append(f'ctypes.byref({py_name}_dim_{i+1})')
                 # Define the actual attribute holder itself.
         if (self.allocatable or (self.dimension is not None)):
@@ -408,7 +408,7 @@ class Argument:
             # Store all the sizes.
             for i in range(len(self.dimension)):
                 dim_name = f'{py_name}_dim_{i+1}'
-                lines.append(f'    {dim_name} = ctypes.c_int({py_name}.shape[{i}])')
+                lines.append(f'    {dim_name} = ctypes.c_long({py_name}.shape[{i}])')
                 call_args.append(f'ctypes.byref({dim_name})')
             # Call passing in all arguments (might include sizes).
             call_args.append(f'ctypes.c_void_p({py_name}.ctypes.data)')
@@ -455,8 +455,8 @@ class Argument:
             decs.insert(0,"USE ISO_FORTRAN_ENV, ONLY: INT64")
             for i in range(len(self.dimension)):
                 args.append(f"{self.name}_DIM_{i+1}")
-                decs.append(f"INTEGER, INTENT(OUT) :: {self.name}_DIM_{i+1}")
-                lines.append(f"{self.name}_DIM_{i+1} = SIZE({self.name}, {i+1})")
+                decs.append(f"INTEGER(KIND=INT64), INTENT(OUT) :: {self.name}_DIM_{i+1}")
+                lines.append(f"{self.name}_DIM_{i+1} = SIZE({self.name}, {i+1}, KIND=INT64)")
         # Disable "parameter" status for the local copy.
         if self.parameter: temp.parameter = False
         # Add argument for the actual variable.
@@ -494,7 +494,7 @@ class Argument:
         if (self.dimension is not None):
             for i in range(len(self.dimension)):
                 args.append(f"{self.name}_DIM_{i+1}")
-                lines.append(f"INTEGER, INTENT(IN) :: {self.name}_DIM_{i+1}")
+                lines.append(f"INTEGER(KIND=SELECTED_INT_KIND(18)), INTENT(IN) :: {self.name}_DIM_{i+1}")
                 temp.dimension.append(args[-1])
         # Add argument for the actual variable.
         args.append(temp.name)
