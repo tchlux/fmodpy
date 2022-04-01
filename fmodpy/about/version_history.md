@@ -13,3 +13,4 @@
 | 1.4.3<br>March 2022 | Added warnings for long compilation, many optional <br> arguments, and included architecture in compiled <br> file names. |
 | 1.4.3<br>March 2022 | Logical byte size adjustment from 03-27 that <br> supports C-bool types with only one byte. |
 | 1.4.4<br>March 2022 | Logical byte size adjustment from 03-27 that <br> supports C-bool types with only one byte. |
+| 1.4.5<br>April 2022 | Updated size measurements for arrays to 64 bit <br> integers. |
