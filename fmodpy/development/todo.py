@@ -60,7 +60,7 @@
 # - assign correct shape (from shape[0] ...) for implicit array arguments
 # - check the memory contiguity of OPTIONAL input arrays 
 # - LOGICAL array warning should only happen *after* non-arguments are deleted
-# - compile dependencies first when 'depends_files' are given and 'autocompile=True'
+# - compile dependencies first when 'dependencies' are given and 'autocompile=True'
 # - remove automatic size option in wrapper for optional arguments with unknown shape
 # - handle automatic shapes that have a ":" inside of them
 # - check for existence of Fortran compiler on install, offer instruction

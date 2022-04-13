@@ -46,7 +46,7 @@ from fmodpy.config import fmodpy_print as print
 #                     directory is created, used, and deleted.
 #    output_dir    -- str, the directory to store the output python
 #                     module. Defaults to `os.getcwd()`.
-#    depends_files -- list of str, paths to Fortran files that should be
+#    dependencies  -- list of str, paths to Fortran files that should be
 #                     checked for changes when compiling the final module.
 #    **kwargs      -- Any configuration options relevant to this
 #                     compilation passed as keyword arguments, 
@@ -65,7 +65,7 @@ from fmodpy.config import fmodpy_print as print
 #    show_warnings -- bool, if miscellaneous warnings should be printed.
 # 
 def fimport(input_fortran_file, name=None, build_dir=None,
-            output_dir=None, depends_files=None, **kwargs):
+            output_dir=None, dependencies=None, **kwargs):
     # Import parsing functions.
     from fmodpy.parsing import after_dot, before_dot, legal_module_name
     from fmodpy.config import run, load_config, \
@@ -145,16 +145,16 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     build_dir, temp_dir = prepare_build_directory(source_dir, build_dir)
 
     # Initialize the list of depended files if they were not given.
-    if (depends_files is None): depends_files = [source_file]
+    if (dependencies is None): dependencies = [source_file]
     # Given a string, assume it should be split by spaces.
-    elif (type(depends_files) is str):  depends_files = depends_files.split()
+    elif (type(dependencies) is str):  dependencies = dependencies.split()
     # If something else was given, then copy it into a list (because files will be appended).
-    else: depends_files = list(depends_files)
+    else: dependencies = list(dependencies)
     # Automatically compile fortran files.
     if autocompile:
         print("Attempting to autocompile..")
         built, failed = autocompile_files(build_dir, source_file)
-        depends_files = [f for f in built if (f not in depends_files)] + depends_files
+        dependencies = [f for f in built if (f not in dependencies)] + dependencies
         print()
         if (len(built) > 0):
             print("Identified dependencies:")
@@ -178,20 +178,20 @@ def fimport(input_fortran_file, name=None, build_dir=None,
         fortran_wrapper, python_wrapper = make_wrapper(
             source_path, build_dir, name)
         # Add fortran wrapper to dependencies and remove any
-        #  duplicates from the "depends_files" list.
-        depends_files.append( os.path.basename(fortran_wrapper_path) )
-        i = len(depends_files)
+        #  duplicates from the "dependencies" list.
+        dependencies.append( os.path.basename(fortran_wrapper_path) )
+        i = len(dependencies)
         while (i > 1):
             i -= 1
-            while (depends_files.index(depends_files[i]) < i):
-                depends_files.pop(depends_files.index(depends_files[i]))
+            while (dependencies.index(dependencies[i]) < i):
+                dependencies.pop(dependencies.index(dependencies[i]))
                 i -= 1
         # Fill all the missing components of the python_wrapper string.
         python_wrapper = python_wrapper.format(
             f_compiler = f_compiler,
             shared_object_name = name,
             f_compiler_args = str(f_compiler_args),
-            dependencies = depends_files
+            dependencies = dependencies
         )
     # Write the wrapper files if this program is supposed to.
     if (not fortran_wrapper_exists) or wrap:
@@ -228,7 +228,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
         # Move the compiled wrapper to the destination.
         shutil.move(build_dir, final_module_path)
         # Remove all files (symlinks) that are not dependencies.
-        all_kept_files = set(depends_files) | {fortran_wrapper_file, python_wrapper_file, "__init__.py"}
+        all_kept_files = set(dependencies) | {fortran_wrapper_file, python_wrapper_file, "__init__.py"}
         for p in os.listdir(final_module_path):
             if ((p not in all_kept_files) and (after_dot(p) != 'mod')):
                 print(f" removing unnecessary file '{p}'..")
@@ -367,7 +367,7 @@ def autocompile_files(build_dir, target_file=None):
                 import warnings
                 warnings.warn("\n  Automatic compilation is taking longer than expected, consider"+
                               "\n  providing explicitly ordered dependencies (precompiled or not) with"+
-                              "\n    fmodpy.fimport('<target>', depends_files=['<path>', ...], ...)\n")
+                              "\n    fmodpy.fimport('<target>', dependencies=['<path>', ...], ...)\n")
                 start_time = float('inf') # <- do this to prevent further warnings
 
             # Try to compile all files that have "f" in the extension.
