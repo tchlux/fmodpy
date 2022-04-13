@@ -14,3 +14,4 @@
 | 1.4.3<br>March 2022 | Logical byte size adjustment from 03-27 that <br> supports C-bool types with only one byte. |
 | 1.4.4<br>March 2022 | Logical byte size adjustment from 03-27 that <br> supports C-bool types with only one byte. |
 | 1.4.5<br>April 2022 | Updated size measurements for arrays to 64 bit <br> integers. |
+| 1.4.6<br>April 2022 | Name change of depends_files to dependencies. Missed <br> this upload last weekend. |
