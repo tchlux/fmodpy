@@ -113,9 +113,16 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (output_dir is None): output_dir = os.getcwd()
     else:                    output_dir = os.path.abspath(output_dir)
 
+    # Initialize the list of depended files if they were not given.
+    if (dependencies is None): dependencies = [source_file]
+    # Given a string, assume it should be split by spaces.
+    elif (type(dependencies) is str):  dependencies = dependencies.split()
+    # If something else was given, then copy it into a list (because files will be appended).
+    else: dependencies = list(dependencies)
+
     # Determine whether or not the module needs to be rebuilt.
     should_rebuild = rebuild or should_rebuild_module(
-        source_path, name, output_dir)
+        dependencies, name, output_dir)
     if not should_rebuild:
         print()
         print("No new modifications to '%s' module, exiting."%(name))
@@ -144,22 +151,17 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     # Prepare the build directory, link in the necessary files.
     build_dir, temp_dir = prepare_build_directory(source_dir, build_dir)
 
-    # Initialize the list of depended files if they were not given.
-    if (dependencies is None): dependencies = [source_file]
-    # Given a string, assume it should be split by spaces.
-    elif (type(dependencies) is str):  dependencies = dependencies.split()
-    # If something else was given, then copy it into a list (because files will be appended).
-    else: dependencies = list(dependencies)
     # Automatically compile fortran files.
     if autocompile:
         print("Attempting to autocompile..")
-        built, failed = autocompile_files(build_dir, source_file)
-        dependencies = [f for f in built if (f not in dependencies)] + dependencies
+        built, failed = autocompile_files(build_dir, dependencies)
+        dependencies = dependencies + [f for f in built if (f not in dependencies)]
         print()
         if (len(built) > 0):
             print("Identified dependencies:")
             for f in built: print(" ",os.path.basename(f))
             print()
+
     # Write the wrappers to the files so they can be compiled.
     existing_fortran_wrapper_path = os.path.join(output_dir, name, fortran_wrapper_file)
     fortran_wrapper_path = os.path.join(build_dir, fortran_wrapper_file)
@@ -300,19 +302,22 @@ def make_wrapper(source_file, build_dir, module_name):
 # Given a build directory (containing some fortran files), repeatedly
 # attempt to compile all files in the build directory until there are
 # no successfully compiled files.
-def autocompile_files(build_dir, target_file=None):
+def autocompile_files(build_dir, dependencies):
     import os, time
     from fmodpy.parsing import after_dot
     # Get configuration parameters.
     from fmodpy.config import run, f_compiler, f_compiler_args, \
         wait_warning_sec, GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
+    # Make compilation option substititions for speed.
+    f_compiler_args = [arg if (arg not in {"-O3", "-O2", "-O1"}) else "-O0"
+                       for arg in f_compiler_args]
+    # Set the wait time and start time.
     wait_warning_sec = int(wait_warning_sec)
     start_time = time.time()
     # Try and compile the rest of the files (that might be fortran) in
     # the working directory in case any are needed for linking.
-    should_compile = []
-    if (target_file is not None):
-        should_compile.append(target_file)
+    should_compile = dependencies[:]
+    dependencies = set(dependencies)
     print()
     # generate the list of files that we sould try to autocompile
     for f in os.listdir(build_dir):
@@ -386,9 +391,11 @@ def autocompile_files(build_dir, target_file=None):
                 if (f not in ordered_depends):
                     ordered_depends.append(f)
                 print("  success.")
-                # If there is a target file and it has successfully
-                #  been compiled, then exit (because we are done).
-                if ((target_file is not None) and (f == target_file)):
+                # If all dependencies have been successfully
+                #  compiled, then exit (because we are done).
+                if (f in dependencies):
+                    dependencies.remove(f)
+                if (len(dependencies) == 0):
                     should_compile = []
                 # Since a file was successfully compiled, break, which
                 #  will trigger another attempt at compiling the
@@ -403,7 +410,7 @@ def autocompile_files(build_dir, target_file=None):
                 # Record failed compilations.
                 if (f not in failed): failed.add(f)
                 print("  failed.")
-                print("NAME:", target_file, f)
+                print("NAME:", f)
                 
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
                 if len(stdout) > 0:
@@ -414,9 +421,9 @@ def autocompile_files(build_dir, target_file=None):
                     print("STANDARD ERROR:")
                     print(stderr_str)
                     # If there is a pure "error" in the target file, raise it.
-                    if ("\nError:" in stderr_str) and (f == target_file):
+                    if ("\nError:" in stderr_str) and (f in dependencies):
                         from fmodpy.exceptions import CompileError
-                        raise CompileError(f"Failed to compile '{target_file}' with error:\n\n{stderr_str}")
+                        raise CompileError(f"Failed to compile '{f}' with error:\n\n{stderr_str}")
                 if (max(len(stdout), len(stderr)) > 0): print('-'*70)
         # Remove the files that were successfully compiled from
         # the list of "should_compile" and the list of "failed".
@@ -424,16 +431,17 @@ def autocompile_files(build_dir, target_file=None):
             if (f in failed):
                 failed.remove(f)
             # The only way that "f" could not be in "should_compile"
-            #  is if a "target_file" was compiled successfully and
+            #  is if all dependencies were compiled successfully and
             #  "should_compile" was overwritten with an empty list.
             if (f not in made_mod) and (len(should_compile) > 0):
                 should_compile.remove(f)
     # Log the files that failed to compile.
     for f in should_compile: print(f"Failed to compile '{f}'.")
     # Raise an error if there was a target file and it was not compiled.
-    if (target_file is not None) and (target_file in failed):
+    failed_dependencies = dependencies & failed
+    if (len(failed_dependencies) > 0):
         from fmodpy.exceptions import CompileError
-        raise(CompileError(f"Failed to compile target file '{target_file}'.\n  Current compilation arguments are:\n    {f_compiler_args}\n  Is a necessary compilation argument for this file or a dependency missing?"))
+        raise(CompileError(f"Failed to compile {failed_dependencies}.\n  Current compilation arguments are:\n    {f_compiler_args}\n  Is a necessary compilation argument or dependency missing?"))
     # Return the list of files that were successfully compiled in
     # the order they were compiled and the files that failed to compile.
     return ordered_depends, failed
@@ -490,7 +498,7 @@ def prepare_build_directory(source_dir, build_dir):
 # ====================================================================
 
 # Return True if a module should be rebuilt, False otherwise.
-def should_rebuild_module(source_path, module_name, module_directory):
+def should_rebuild_module(dependencies, module_name, module_directory):
     # Get the modification time of the Python package file.
     import os, sys, pkgutil, importlib
     # Get the last modification time of the module (if it exists already)
@@ -500,8 +508,8 @@ def should_rebuild_module(source_path, module_name, module_directory):
     package = pkgutil.get_loader(module_name)
     if package is None: module_mod_time = 0
     else:               module_mod_time = os.path.getmtime(package.path)
-    # Get the modification time of the source file.
-    source_mod_time = os.path.getmtime(source_path)
+    # Get the latest modification time of all source files.
+    source_mod_time = max(map(os.path.getmtime, dependencies))
     # Return `True` if the source file has been modified since the
     # last construction of the module.
     if (module_mod_time <= source_mod_time):
