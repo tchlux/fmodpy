@@ -5,6 +5,7 @@ omp                = False
 blas               = False
 lapack             = False
 verbose            = False
+verbose_module     = True
 autocompile        = True
 wrap               = True
 rebuild            = False

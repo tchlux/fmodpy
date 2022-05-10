@@ -17,12 +17,13 @@ class Subroutine(Code):
                    (parse_argument, "arguments"),
     ]
     will_ignore = [parse_subroutine, parse_function]
+    bind_c = False # Set to 'True' in '.parse' if BIND(C) is found.
 
     # Produce a string representation of this Subroutine object as it
     # appears in the Fortran source (NOT as the wrapper will appear).
     def __str__(self):
         # Print out header line.
-        out = f"{self.type} {self.name}({', '.join([a.name for a in self.arguments])})\n"
+        out = f"{self.type} {self.name}({', '.join([a.name for a in self.arguments])}){'' if not self.bind_c else ' BIND(C)'}\n"
         # Add documentation.
         if (len(self.docs.strip()) > 0):
             doc_lines = self.docs.strip().split("\n")
@@ -59,6 +60,7 @@ class Subroutine(Code):
         declaration_line = list_of_lines.pop(0).strip().split()
         arg_start = declaration_line.index("(")
         arg_end = declaration_line.index(")")
+        self.bind_c = "BIND(C)" in "".join(declaration_line[arg_end+1:])
         argument_names = declaration_line[arg_start+1:arg_end]
         argument_order = argument_names.copy()
         while "," in argument_names: argument_names.remove(",")

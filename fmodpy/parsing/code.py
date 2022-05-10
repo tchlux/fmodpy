@@ -182,10 +182,13 @@ class Code:
             # Evaluate the size of all arguments for this routine.
             size_prog =  "PROGRAM GET_SIZE\n"
             # Add a use line for the module this is in (if it is inside one).
-            if (self.parent is not None) and (self.parent.type == "MODULE"):
-                size_prog += f"  USE {self.parent.name}\n"
+            if (self.parent is not None):
+                # If the parent is a module, assume access to it with a USE.
+                if (self.parent.type == "MODULE"):
+                    size_prog += f"  USE {self.parent.name}\n"
                 # Add any used modules by the parent (because this has access to those).
-                for line in self.parent.uses: size_prog += f"  {line}\n"
+                if (hasattr(self.parent, "uses")):
+                    for line in self.parent.uses: size_prog += f"  {line}\n"
 
             # # If this is a TYPE, then add the type declaration.
             # if (self.type == "TYPE"):

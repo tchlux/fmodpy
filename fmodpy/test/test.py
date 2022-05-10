@@ -40,7 +40,7 @@
 
 def run_tests():
     from fmodpy.config import load_config
-    load_config(verbose=False, wrap=True, rebuild=True)
+    load_config(verbose=False, verbose_module=False, wrap=True, rebuild=True)
 
     # Import all of the tests.
     from fmodpy.test.character import test as test_character
@@ -54,6 +54,7 @@ def run_tests():
     from fmodpy.test.complex64 import test as test_complex64
     from fmodpy.test.complex128 import test as test_complex128
     from fmodpy.test.type import test as test_type
+    from fmodpy.test.misc import test as test_misc
 
     # Run all of the tests.
     test_character()
@@ -67,6 +68,7 @@ def run_tests():
     test_complex64()
     test_complex128()
     test_type()
+    test_misc()
 
 
 if __name__ == "__main__":
@@ -88,6 +90,7 @@ if __name__ == "__main__":
     run_tests()
 
     exit()
+
     print()
     print("Generating code coverage report..", flush=True)
     # Save data from the coverage tracking (for report).

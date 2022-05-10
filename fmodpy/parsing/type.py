@@ -14,6 +14,18 @@ class {name}(ctypes.Structure):
     def __init__(self, value={default}, **kwargs):
         # From whatever object (or dictionary) was given, assign internal values.
         {field_declarations}
+    # Define a "__str__" that produces a legible summary of this type.
+    def __str__(self):
+        s = []
+        for (n, t) in self._fields_:
+            s.append( n + "=" + str(getattr(self,n)) )
+        return "{name}[" + ", ".join(s) + "]"
+    # Define an "__eq__" method that checks equality of all fields.
+    def __eq__(self, other):
+        for (n, t) in self._fields_:
+            if (getattr(self, n) != getattr(other, n, None)):
+                return False
+        return True
 '''
 
 

@@ -64,7 +64,7 @@ class Fortran(Code):
                  '# --------------------------------------------------------------------',
                  '#               CONFIGURATION',
                  '# ', 
-                 '_verbose = True',
+                 '_verbose = {verbose_module}',
                  '_fort_compiler = "{f_compiler}"',
                  '_shared_object_name = "{shared_object_name}." + platform.machine() + ".so"',
                  '_this_directory = os.path.dirname(os.path.abspath(__file__))',

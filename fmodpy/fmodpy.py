@@ -78,7 +78,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (len(kwargs) > 0): load_config(**kwargs) # <- assigns given configuration
     # Import some locally used settings.
     from fmodpy.config import wrap, rebuild, autocompile, \
-        f_compiler, f_compiler_args, delete_destination
+        verbose_module, f_compiler, f_compiler_args, delete_destination
 
     # Print the configuration (when verbose).
     print()
@@ -122,7 +122,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Determine whether or not the module needs to be rebuilt.
     should_rebuild = rebuild or should_rebuild_module(
-        dependencies, name, output_dir)
+        [os.path.join(source_dir, d) for d in dependencies], name, output_dir)
     if not should_rebuild:
         print()
         print("No new modifications to '%s' module, exiting."%(name))
@@ -190,6 +190,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
                 i -= 1
         # Fill all the missing components of the python_wrapper string.
         python_wrapper = python_wrapper.format(
+            verbose_module = verbose_module,
             f_compiler = f_compiler,
             shared_object_name = name,
             f_compiler_args = str(f_compiler_args),
