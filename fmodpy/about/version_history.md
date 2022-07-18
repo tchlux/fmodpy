@@ -17,3 +17,4 @@
 | 1.4.6<br>April 2022 | Name change of depends_files to dependencies. Missed <br> this upload last weekend. |
 | 1.4.7<br>April 2022 | Updated dependency handling, automatic compilation <br> now starts with dependencies in order, source code <br> modification times are checked for all dependencies. |
 | 1.4.8<br>May 2022 | Added support for types defined in subroutines in <br> standalone files. Updated test case to reflect new <br> addition. Added 'verbose_module' parameter for <br> setting the default verbosity of generated modules. |
+| 1.5.0<br>July 2022 | Added the ability to load symbols from system <br> libraries, improves automatic dependency resolution. |
