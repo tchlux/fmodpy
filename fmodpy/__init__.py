@@ -13,8 +13,8 @@ from .fmodpy import __doc__
 import fmodpy.config
 
 # Import the main features of this package.
-from .fmodpy import fimport, configure
+from .fmodpy import fimport, configure, load_symbol
 
 # Set "__all__" so that "from fmodpy import *" returns expected stuff.
-__all__ = ["fimport", "configure"]
+__all__ = ["fimport", "configure", "load_symbol"]
 

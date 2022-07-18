@@ -21,6 +21,7 @@
 
 # Overwrite the "print" function to add "FMODPY" specific printouts.
 from fmodpy.config import fmodpy_print as print
+from fmodpy.config import libraries
 
 # Function for automating the entire fortran<->python wrapping
 #   process. This is the top-level function built for standard usage.
@@ -48,6 +49,10 @@ from fmodpy.config import fmodpy_print as print
 #                     module. Defaults to `os.getcwd()`.
 #    dependencies  -- list of str, paths to Fortran files that should be
 #                     checked for changes when compiling the final module.
+#    symbols       -- list of str, names of symbols that are expected to be
+#                     defined by local libraries. list of tuple of str, pairs 
+#                     of symbol names and an expected substring in the library
+#                     file that contains that symbol's definition.
 #    **kwargs      -- Any configuration options relevant to this
 #                     compilation passed as keyword arguments, 
 #                     see `help(fmodpy)` for more information, or
@@ -65,7 +70,7 @@ from fmodpy.config import fmodpy_print as print
 #    show_warnings -- bool, if miscellaneous warnings should be printed.
 # 
 def fimport(input_fortran_file, name=None, build_dir=None,
-            output_dir=None, dependencies=None, **kwargs):
+            output_dir=None, dependencies=None, symbols=None, **kwargs):
     # Import parsing functions.
     from fmodpy.parsing import after_dot, before_dot, legal_module_name
     from fmodpy.config import run, load_config, \
@@ -119,6 +124,9 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     elif (type(dependencies) is str):  dependencies = dependencies.split()
     # If something else was given, then copy it into a list (because files will be appended).
     else: dependencies = list(dependencies)
+    # Make sure that the source file is in the list of dependencies.
+    if (source_file not in dependencies):
+        dependencies.append(source_file)
 
     # Determine whether or not the module needs to be rebuilt.
     should_rebuild = rebuild or should_rebuild_module(
@@ -150,6 +158,27 @@ def fimport(input_fortran_file, name=None, build_dir=None,
  
     # Prepare the build directory, link in the necessary files.
     build_dir, temp_dir = prepare_build_directory(source_dir, build_dir)
+
+    # Find any required sources and link them into the build directory.
+    if (symbols is not None):
+        symbol_deps = []
+        print(f"Searching libraries for symbols:\n  {symbols}")
+        for symbol in symbols:
+            if (type(symbol) is not str):
+                symbol, filename_includes = symbol
+                symbol_kwargs = dict(filename_includes=filename_includes)
+            else: symbol_kwargs = {}
+            lib_file = load_symbol(symbol, **symbol_kwargs)
+            lib_name = os.path.basename(lib_file)
+            lib_dest = os.path.join(build_dir, lib_name)
+            if (not os.path.exists(lib_dest)):
+                print(f" sym-linking '{lib_file}' to '{lib_dest}'")
+                os.symlink(os.path.realpath(lib_file), lib_dest)
+            else:
+                print(f" skpping sym-link to '{lib_file}', already exists at '{lib_dest}'")
+            symbol_deps.append(lib_name)
+        print()
+        dependencies = symbol_deps + dependencies
 
     # Automatically compile fortran files.
     if autocompile:
@@ -447,6 +476,58 @@ def autocompile_files(build_dir, dependencies):
     # the order they were compiled and the files that failed to compile.
     return ordered_depends, failed
 
+# ====================================================================
+
+# Given a symbol name, try to locate the library that defines it
+#   and load the symbol as a CDLL so that it is accessible.
+def load_symbol(symbol, filename_includes=""):
+    import os, subprocess, re, ctypes
+    from fmodpy.config import libraries, library_recursion, library_extensions, symbol_command
+    # This code will find the first match for the symbol in a library.
+    max_recursion = library_recursion
+    versions = set()
+    directories = [(p,max_recursion) for p in libraries]
+    checked_files = 0
+    symbol_file = None
+    while ((len(directories) > 0) and (symbol_file is None)):
+        directory, max_recursion = directories.pop(0)
+        # Skip nonexistant directories.
+        if (not os.path.exists(directory)):
+            print(f" MISSING - no such path '{directory}'.")
+            continue
+        if (not os.access(directory, os.R_OK)):
+            print(f" SKIPPING - not allowed to read '{directory}'.")
+            continue
+        # Get all files with the desired extension.
+        file_paths = [
+            os.path.join(directory, f)
+            for f in os.listdir(directory)
+            if  (not os.path.isdir(os.path.join(directory, f)))
+            and (f.split(".")[-1] in library_extensions)
+            and (filename_includes in f)
+        ]
+        # Iterate over candidate files and check their symbol tables.
+        for f in file_paths:
+            checked_files += 1
+            print(f" checking for '{symbol}' in '{f}'.")
+            symbols = str(subprocess.run(symbol_command + f'"{f}"', shell=True,
+                                         capture_output=True).stdout, "utf8")
+            if (" "+symbol+"\n" in symbols):
+                symbol_file = f
+                break
+        # Recurse into directories (up to provided max depth).
+        if ((max_recursion > 0) and (symbol_file is None)):
+            directories += [
+                (os.path.join(directory, d), max_recursion-1)
+                for d in os.listdir(directory)
+                if os.path.isdir(os.path.join(directory, d))
+            ]
+    # Raise an error if no symbol file was found.
+    if (symbol_file is None):
+        raise(NotImplementedError(f"After checking {checked_files} files, the symbol '{symbol}' could not be found in any of the fmodpy.config.libraries paths:\n   {libraries}"))
+    # Load the library globally (so it is accessible to later codes) and return its path.
+    ctypes.CDLL(symbol_file, mode=ctypes.RTLD_GLOBAL)
+    return symbol_file
 
 # ====================================================================
 

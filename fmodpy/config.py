@@ -1,4 +1,5 @@
 import os, sysconfig
+import numpy as NP
 
 # Default configurable variables.
 omp                = False
@@ -21,6 +22,10 @@ link_omp           = '-fopenmp'
 link_blas          = '-lblas'
 link_lapack        = '-lblas -llapack'
 home_directory     = os.path.expanduser("~")
+libraries          = "/usr/lib " + " ".join(NP.__path__)
+library_recursion  = 2
+library_extensions = "so dylib"
+symbol_command     = "nm -gU "
 config_file        = ".fmodpy.py"
 wait_warning_sec   = 5 # number of seconds to wait before warning about automatic compilation
 
@@ -33,7 +38,7 @@ BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
                     'debug_line_numbers', 'implicit_typing',
                     'end_is_named', 'delete_destination']
 LIST_CONFIG_VARS = ['f_compiler_args', 'link_omp', 'link_blas',
-                    'link_lapack']
+                    'link_lapack', 'libraries', 'library_extensions']
 # File related maniplation arguments
 PY_EXT = ".py"
 FORT_EXT = ".f90"
