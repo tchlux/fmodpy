@@ -161,7 +161,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
 
     # Find any required sources and link them into the build directory.
     if (symbols is not None):
-        symbol_deps = []
+        symbol_files = []
         print(f"Searching libraries for symbols:\n  {symbols}")
         for symbol in symbols:
             if (type(symbol) is not str):
@@ -176,9 +176,11 @@ def fimport(input_fortran_file, name=None, build_dir=None,
                 os.symlink(os.path.realpath(lib_file), lib_dest)
             else:
                 print(f" skpping sym-link to '{lib_file}', already exists at '{lib_dest}'")
-            symbol_deps.append(lib_name)
+            symbol_files.append(lib_name)
         print()
-        dependencies = symbol_deps + dependencies
+        dependencies = symbol_files + dependencies
+    else:
+        symbol_files = []
 
     # Automatically compile fortran files.
     if autocompile:
@@ -223,7 +225,8 @@ def fimport(input_fortran_file, name=None, build_dir=None,
             f_compiler = f_compiler,
             shared_object_name = name,
             f_compiler_args = str(f_compiler_args),
-            dependencies = dependencies
+            dependencies = dependencies,
+            symbol_files = symbol_files,
         )
     # Write the wrapper files if this program is supposed to.
     if (not fortran_wrapper_exists) or wrap:
@@ -503,16 +506,16 @@ def load_symbol(symbol, filename_includes=""):
             os.path.join(directory, f)
             for f in os.listdir(directory)
             if  (not os.path.isdir(os.path.join(directory, f)))
-            and (f.split(".")[-1] in library_extensions)
+            and (any(ext in library_extensions for ext in f.split(".")[1:]))
             and (filename_includes in f)
         ]
         # Iterate over candidate files and check their symbol tables.
         for f in file_paths:
             checked_files += 1
-            print(f" checking for '{symbol}' in '{f}'.")
-            symbols = str(subprocess.run(symbol_command + f'"{f}"', shell=True,
+            print(f" checking for '{symbol}' in '{f}' with '{symbol_command.format(path=f)}'.")
+            symbols = str(subprocess.run(symbol_command.format(path=f), shell=True,
                                          capture_output=True).stdout, "utf8")
-            if (" "+symbol+"\n" in symbols):
+            if (symbol+"\n" in symbols):
                 symbol_file = f
                 break
         # Recurse into directories (up to provided max depth).

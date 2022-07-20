@@ -25,7 +25,7 @@ home_directory     = os.path.expanduser("~")
 libraries          = "/usr/lib " + " ".join(NP.__path__)
 library_recursion  = 2
 library_extensions = "so dylib"
-symbol_command     = "nm -gU "
+symbol_command     = 'nm -gU "{path}" 2> /dev/null || nm -gD "{path}" 2> /dev/null'
 config_file        = ".fmodpy.py"
 wait_warning_sec   = 5 # number of seconds to wait before warning about automatic compilation
 
