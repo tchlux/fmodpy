@@ -19,3 +19,4 @@
 | 1.4.8<br>May 2022 | Added support for types defined in subroutines in <br> standalone files. Updated test case to reflect new <br> addition. Added 'verbose_module' parameter for <br> setting the default verbosity of generated modules. |
 | 1.5.0<br>July 2022 | Added the ability to load symbols from system <br> libraries, improves automatic dependency resolution. |
 | 1.5.1<br>July 2022 | Minor modifications to fix some compilation and <br> import bugs when supporting generic search for <br> symbols. Symbol dependencies are now loaded within <br> the generated wrapper, to ensure correct operation <br> after the initial build. |
+| 1.5.2<br>July 2022 | Added some additional standard library search paths <br> and renamed 'delete_destination' as 'overwrite'. <br> Also changed default configurations that were <br> strings being split into proper Python lists. |
