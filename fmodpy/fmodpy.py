@@ -83,7 +83,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (len(kwargs) > 0): load_config(**kwargs) # <- assigns given configuration
     # Import some locally used settings.
     from fmodpy.config import wrap, rebuild, autocompile, \
-        verbose_module, f_compiler, f_compiler_args, delete_destination
+        verbose_module, f_compiler, f_compiler_args, overwrite
 
     # Print the configuration (when verbose).
     print()
@@ -248,7 +248,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if not (build_dir == final_module_path):
         # Remove the existing wrapper module if it exists.
         if os.path.exists(final_module_path):
-            if (delete_destination):
+            if (overwrite):
                 print(f" deleting existing directory at '{final_module_path}'..")
                 shutil.rmtree(final_module_path)
             else:

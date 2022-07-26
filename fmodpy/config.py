@@ -14,17 +14,26 @@ show_warnings      = True
 debug_line_numbers = False
 implicit_typing    = False
 end_is_named       = True
-delete_destination = False # hard-delete destination directory if it already exists
+overwrite          = False # hard-delete destination directory if it already exists
 log_file           = os.devnull
-f_compiler         = 'gfortran'
-f_compiler_args    = '-fPIC -shared -O3'
-link_omp           = '-fopenmp'
-link_blas          = '-lblas'
-link_lapack        = '-lblas -llapack'
+f_compiler         = "gfortran"
+f_compiler_args    = ["-fPIC", "-shared", "-O3"]
+link_omp           = ["-fopenmp"]
+link_blas          = ["-lblas"]
+link_lapack        = ["-lblas", "-llapack"]
 home_directory     = os.path.expanduser("~")
-libraries          = "/usr/lib " + " ".join(NP.__path__)
+libraries          = NP.__path__ + [
+    "/usr/lib",
+    "/lib",
+    "/usr/lib64",
+    "/lib64",
+    "/usr/lib32",
+    "/lib32",
+    "/opt/homebrew/Cellar/openblas",
+    "/opt/homebrew/Cellar/libomp"
+]
 library_recursion  = 2
-library_extensions = "so dylib"
+library_extensions = ["so", "dylib"]
 symbol_command     = 'nm -gU "{path}" 2> /dev/null || nm -gD "{path}" 2> /dev/null'
 config_file        = ".fmodpy.py"
 wait_warning_sec   = 5 # number of seconds to wait before warning about automatic compilation
@@ -33,12 +42,12 @@ wait_warning_sec   = 5 # number of seconds to wait before warning about automati
 #      Development globals, not intended to be changed by users.
 # 
 # All of these variables should have expected types.
-BOOL_CONFIG_VARS = ['omp', 'blas', 'lapack', 'verbose', 'autocompile',
-                    'wrap', 'rebuild', 'show_warnings',
-                    'debug_line_numbers', 'implicit_typing',
-                    'end_is_named', 'delete_destination']
-LIST_CONFIG_VARS = ['f_compiler_args', 'link_omp', 'link_blas',
-                    'link_lapack', 'libraries', 'library_extensions']
+BOOL_CONFIG_VARS = ["omp", "blas", "lapack", "verbose", "autocompile",
+                    "wrap", "rebuild", "show_warnings",
+                    "debug_line_numbers", "implicit_typing",
+                    "end_is_named", "overwrite"]
+LIST_CONFIG_VARS = ["f_compiler_args", "link_omp", "link_blas",
+                    "link_lapack", "libraries", "library_extensions"]
 # File related maniplation arguments
 PY_EXT = ".py"
 FORT_EXT = ".f90"
