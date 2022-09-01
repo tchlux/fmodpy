@@ -48,7 +48,9 @@ class Argument:
     #          size checking will have an exact 1-1 mapping of arguments.
     def function_safe_name(self):
         name = self.name
-        if (self.parent is not None) and (self.parent.name == self.name):
+        if (self.allocatable):
+            name += "_LOCAL"
+        elif (self.parent is not None) and (self.parent.name == self.name):
             name += "_RESULT"
         return name
 
@@ -60,10 +62,10 @@ class Argument:
     #          Fortran call will have an exact 1-1 mapping of arguments.
     def fort_call_name(self):
         name = self.name
-        if (self.parent is not None) and (self.parent.name == self.name):
-            name += "_RESULT"
-        elif (self.allocatable):
+        if (self.allocatable):
             name += "_LOCAL"
+        elif (self.parent is not None) and (self.parent.name == self.name):
+            name += "_RESULT"
         return name
 
     # Names of arguments that will be given to the Fortran wrapper.
@@ -139,13 +141,13 @@ class Argument:
         if (is_output and self.allocatable):
             if (self.dimension is None): raise NotImplementedError
             for i in range(1,len(self.dimension)+1):
-                if present: size = f"SIZE({self.function_safe_name()}_LOCAL,{i})"
+                if present: size = f"SIZE({self.function_safe_name()},{i})"
                 else:       size = "0"
-                lines.append(f"{self.function_safe_name()}_DIM_{i} = {size}")
+                lines.append(f"{self.name}_DIM_{i} = {size}")
             # Copy the allocatable address only when it is present.
             if present:
                 first_pos = ",".join(["1"]*len(self.dimension))
-                lines.append(f"{self.function_safe_name()} = LOC({self.name}_LOCAL({first_pos}))")
+                lines.append(f"{self.fort_input()[-1]} = LOC({self.function_safe_name()}({first_pos}))")
         # Return the list of lines.
         return lines
 

@@ -45,6 +45,10 @@ def test():
     assert(all(out3[1] == [3,2,1]))
     assert(all(out3[2] == list(reversed(range(7)[1:]))))
 
+    # Check that a function with an allocatable return works correctly.
+    n = 13
+    assert(tuple(fort.test_allocatable_return(n).tolist()) == tuple(reversed(list(range(n)))))
+
     # End specific testing code.
     # ---------------------------------------------------------------
     print("passed", flush=True)

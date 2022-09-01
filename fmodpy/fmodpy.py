@@ -515,7 +515,7 @@ def load_symbol(symbol, filename_includes=""):
             print(f" checking for '{symbol}' in '{f}' with '{symbol_command.format(path=f)}'.")
             symbols = str(subprocess.run(symbol_command.format(path=f), shell=True,
                                          capture_output=True).stdout, "utf8")
-            if (symbol+"\n" in symbols):
+            if (re.search(r"(\W|^)"+symbol+r"(\W|$)", symbols) is not None):
                 symbol_file = f
                 break
         # Recurse into directories (up to provided max depth).
@@ -591,8 +591,18 @@ def should_rebuild_module(dependencies, module_name, module_directory):
     # the time-check import loader will work correctly.
     sys.path.insert(0, module_directory)
     package = pkgutil.get_loader(module_name)
-    if package is None: module_mod_time = 0
-    else:               module_mod_time = os.path.getmtime(package.path)
+    if package is None:
+        module_mod_time = 0
+    elif (hasattr(package, "path")): # For regular source code packages.
+        module_mod_time = os.path.getmtime(package.path)
+    elif (hasattr(package, "archive")): # For zipimporter packages.
+        module_mod_time = os.path.getmtime(package.archive)
+    elif (hasattr(package, "__file__")): # Just guessing that this might work.
+        module_mod_time = os.path.getmtime(os.path.realpath(package.__file__))
+    else: # Unkonwn situation.
+        import warnings
+        warnings.warn(f"Could not determine the modification time of the package '{module_name}'.")
+        module_mod_time = 0
     # Get the latest modification time of all source files.
     source_mod_time = max(map(os.path.getmtime, dependencies))
     # Return `True` if the source file has been modified since the
