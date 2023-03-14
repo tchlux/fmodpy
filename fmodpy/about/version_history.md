@@ -20,3 +20,4 @@
 | 1.5.0<br>July 2022 | Added the ability to load symbols from system <br> libraries, improves automatic dependency resolution. |
 | 1.5.1<br>July 2022 | Minor modifications to fix some compilation and <br> import bugs when supporting generic search for <br> symbols. Symbol dependencies are now loaded within <br> the generated wrapper, to ensure correct operation <br> after the initial build. |
 | 1.5.2<br>July 2022 | Added some additional standard library search paths <br> and renamed 'delete_destination' as 'overwrite'. <br> Also changed default configurations that were <br> strings being split into proper Python lists. |
+| 1.5.3<br>March 2023 | Minor update. Changed some logic in fimport to more <br> correctly support different system configurations. <br> Added comments drescribing most configurable <br> settings. Added support for TARGET and POINTER <br> types. |
