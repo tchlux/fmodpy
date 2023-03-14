@@ -85,211 +85,216 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     from fmodpy.config import wrap, rebuild, autocompile, \
         verbose_module, f_compiler, f_compiler_args, overwrite
 
-    # Print the configuration (when verbose).
-    print()
-    print("_"*70)
-    print("fimport")
-    print()
-    print("fmodpy configuration:")
-    c = load_config()
-    for n in sorted(c): print(f"  {n} = {str([c[n]])[1:-1]}")
-    if (len(c) > 0): del n
-    del c
-
-    # Get the source file and the source directory.
-    source_path = os.path.abspath(input_fortran_file)
-    source_file = os.path.basename(source_path)
-    source_dir = os.path.dirname(source_path)
-    
-
-    # If the name is not defined, then try to automatically produce it.
-    if (name is None): name = before_dot(source_file)
-
-    # Check to make sure that the module name is legal.
-    if not legal_module_name(name):
-        from fmodpy.exceptions import NameError
-        raise(NameError((f"'{name}' is not an allowed module name,\n"+
-                         " must match the regexp `^[a-zA-Z_]+"+
-                         "[a-zA-Z0-9_]*`. Set the name with:\n"+
-                         " fmodpy.fimport(<file>, name='<legal name>')"+
-                         " OR\n $ fmodpy <file> name=<legal_name>")))
-
-    # Set the default output directory
-    if (output_dir is None): output_dir = os.getcwd()
-    else:                    output_dir = os.path.abspath(output_dir)
-
-    # Initialize the list of depended files if they were not given.
-    if (dependencies is None): dependencies = [source_file]
-    # Given a string, assume it should be split by spaces.
-    elif (type(dependencies) is str):  dependencies = dependencies.split()
-    # If something else was given, then copy it into a list (because files will be appended).
-    else: dependencies = list(dependencies)
-    # Make sure that the source file is in the list of dependencies.
-    if (source_file not in dependencies):
-        dependencies.append(source_file)
-
-    # Determine whether or not the module needs to be rebuilt.
-    should_rebuild = rebuild or should_rebuild_module(
-        [os.path.join(source_dir, d) for d in dependencies], name, output_dir)
-    if not should_rebuild:
+    # Since the global configuration has been modified, wrap all operations in a try-finally.
+    try:
+        # Print the configuration (when verbose).
         print()
-        print("No new modifications to '%s' module, exiting."%(name))
-        print("^"*70)
-        return importlib.import_module(name)
-
-    # Generate the names of files that will be created by this
-    # program, so that we can copy them to an "old" directory if necessary.
-    fortran_wrapper_file = name+FORT_WRAPPER_EXT
-    python_wrapper_file = name+PYTHON_WRAPPER_EXT+PY_EXT
-    build_dir_name = build_dir if (build_dir is not None) else "temporary directory"
-    bar_width = 23 + max(map(len,(source_dir, source_file, name, build_dir_name,
-                                  fortran_wrapper_file, python_wrapper_file, output_dir)))
-    print()
-    print("="*bar_width)
-    print("Input file directory: ",source_dir)
-    print("Input file name:      ",source_file)
-    print("Base module name:     ",name)
-    print("Using build dir:      ",build_dir_name)
-    print("  fortran wrapper:    ",fortran_wrapper_file)
-    print("  python wrapper:     ",python_wrapper_file)
-    print("Output module path:   ",output_dir)
-    print("="*bar_width)
-    print()
- 
-    # Prepare the build directory, link in the necessary files.
-    build_dir, temp_dir = prepare_build_directory(source_dir, build_dir)
-
-    # Find any required sources and link them into the build directory.
-    if (symbols is not None):
-        symbol_files = []
-        print(f"Searching libraries for symbols:\n  {symbols}")
-        for symbol in symbols:
-            if (type(symbol) is not str):
-                symbol, filename_includes = symbol
-                symbol_kwargs = dict(filename_includes=filename_includes)
-            else: symbol_kwargs = {}
-            lib_file = load_symbol(symbol, **symbol_kwargs)
-            lib_name = os.path.basename(lib_file)
-            lib_dest = os.path.join(build_dir, lib_name)
-            if (not os.path.exists(lib_dest)):
-                print(f" sym-linking '{lib_file}' to '{lib_dest}'")
-                os.symlink(os.path.realpath(lib_file), lib_dest)
-            else:
-                print(f" skpping sym-link to '{lib_file}', already exists at '{lib_dest}'")
-            symbol_files.append(lib_name)
+        print("_"*70)
+        print("fimport")
         print()
-        dependencies = symbol_files + dependencies
-    else:
-        symbol_files = []
+        print("fmodpy configuration:")
+        c = load_config()
+        for n in sorted(c): print(f"  {n} = {str([c[n]])[1:-1]}")
+        if (len(c) > 0): del n
+        del c
 
-    # Automatically compile fortran files.
-    if autocompile:
-        print("Attempting to autocompile..")
-        built, failed = autocompile_files(build_dir, dependencies)
-        dependencies = dependencies + [f for f in built if (f not in dependencies)]
-        print()
-        if (len(built) > 0):
-            print("Identified dependencies:")
-            for f in built: print(" ",os.path.basename(f))
+        # Get the source file and the source directory.
+        source_path = os.path.realpath(input_fortran_file)
+        source_file = os.path.basename(source_path)
+        source_dir = os.path.dirname(source_path)
+
+        # If the name is not defined, then try to automatically produce it.
+        if (name is None): name = before_dot(source_file)
+
+        # Check to make sure that the module name is legal.
+        if not legal_module_name(name):
+            from fmodpy.exceptions import NameError
+            raise(NameError((f"'{name}' is not an allowed module name,\n"+
+                             " must match the regexp `^[a-zA-Z_]+"+
+                             "[a-zA-Z0-9_]*`. Set the name with:\n"+
+                             " fmodpy.fimport(<file>, name='<legal name>')"+
+                             " OR\n $ fmodpy <file> name=<legal_name>")))
+
+        # Set the default output directory
+        if (output_dir is None): output_dir = os.getcwd()
+        else:                    output_dir = os.path.abspath(output_dir)
+
+        # Initialize the list of depended files if they were not given.
+        if (dependencies is None): dependencies = [source_file]
+        # Given a string, assume it should be split by spaces.
+        elif (type(dependencies) is str):  dependencies = dependencies.split()
+        # If something else was given, then copy it into a list (because files will be appended).
+        else: dependencies = list(dependencies)
+        # Make sure that the source file is in the list of dependencies.
+        if (source_file not in dependencies):
+            dependencies.append(source_file)
+
+        # Determine whether or not the module needs to be rebuilt.
+        should_rebuild = rebuild or should_rebuild_module(
+            [os.path.join(source_dir, d) for d in dependencies], name, output_dir)
+        if not should_rebuild:
             print()
+            print("No new modifications to '%s' module, exiting."%(name))
+            print("^"*70)
+            return importlib.import_module(name)
 
-    # Write the wrappers to the files so they can be compiled.
-    existing_fortran_wrapper_path = os.path.join(output_dir, name, fortran_wrapper_file)
-    fortran_wrapper_path = os.path.join(build_dir, fortran_wrapper_file)
-    existing_python_wrapper_path = os.path.join(output_dir, name, python_wrapper_file)
-    python_wrapper_path = os.path.join(build_dir, python_wrapper_file)
-    # Move the existing wrapper to the new build directory (if it is to be kept).
-    if (os.path.exists(existing_fortran_wrapper_path) and (not wrap)):
-        shutil.move(existing_fortran_wrapper_path, fortran_wrapper_path)
-    if (os.path.exists(existing_python_wrapper_path) and (not wrap)):
-        shutil.move(existing_python_wrapper_path, python_wrapper_path)
-    # Check for the existence of the wrapper files (in the build or output directories).
-    fortran_wrapper_exists = os.path.exists(fortran_wrapper_path)
-    python_wrapper_exists = os.path.exists(python_wrapper_path)
-    # Generate the wrappers for going from python <-> fortran.
-    if (wrap or (not fortran_wrapper_exists) or (not python_wrapper_exists)):
-        fortran_wrapper, python_wrapper = make_wrapper(
-            source_path, build_dir, name)
-        # Add fortran wrapper to dependencies and remove any
-        #  duplicates from the "dependencies" list.
-        dependencies.append( os.path.basename(fortran_wrapper_path) )
-        i = len(dependencies)
-        while (i > 1):
-            i -= 1
-            while (dependencies.index(dependencies[i]) < i):
-                dependencies.pop(dependencies.index(dependencies[i]))
+        # Generate the names of files that will be created by this
+        # program, so that we can copy them to an "old" directory if necessary.
+        fortran_wrapper_file = name+FORT_WRAPPER_EXT
+        python_wrapper_file = name+PYTHON_WRAPPER_EXT+PY_EXT
+        build_dir_name = build_dir if (build_dir is not None) else "temporary directory"
+        bar_width = 23 + max(map(len,(source_dir, source_file, name, build_dir_name,
+                                      fortran_wrapper_file, python_wrapper_file, output_dir)))
+        print()
+        print("="*bar_width)
+        print("Input file directory: ",source_dir)
+        print("Input file name:      ",source_file)
+        print("Base module name:     ",name)
+        print("Using build dir:      ",build_dir_name)
+        print("  fortran wrapper:    ",fortran_wrapper_file)
+        print("  python wrapper:     ",python_wrapper_file)
+        print("Output module path:   ",output_dir)
+        print("="*bar_width)
+        print()
+
+        # Prepare the build directory, link in the necessary files.
+        build_dir, temp_dir = prepare_build_directory(source_dir, build_dir)
+
+        # Find any required sources and link them into the build directory.
+        if (symbols is not None):
+            symbol_files = []
+            print(f"Searching libraries for symbols:\n  {symbols}")
+            for symbol in symbols:
+                if (type(symbol) is not str):
+                    symbol, filename_includes = symbol
+                    symbol_kwargs = dict(filename_includes=filename_includes)
+                else: symbol_kwargs = {}
+                lib_file = load_symbol(symbol, **symbol_kwargs)
+                lib_name = os.path.basename(lib_file)
+                lib_dest = os.path.join(build_dir, lib_name)
+                if (not os.path.exists(lib_dest)):
+                    print(f" sym-linking '{lib_file}' to '{lib_dest}'")
+                    os.symlink(os.path.realpath(lib_file), lib_dest)
+                else:
+                    print(f" skpping sym-link to '{lib_file}', already exists at '{lib_dest}'")
+                symbol_files.append(lib_name)
+            print()
+            dependencies = symbol_files + dependencies
+        else:
+            symbol_files = []
+
+        # Automatically compile fortran files.
+        if autocompile:
+            print("Attempting to autocompile..")
+            built, failed = autocompile_files(build_dir, dependencies)
+            dependencies = dependencies + [f for f in built if (f not in dependencies)]
+            print()
+            if (len(built) > 0):
+                print("Identified dependencies:")
+                for f in built: print(" ",os.path.basename(f))
+                print()
+
+        # Write the wrappers to the files so they can be compiled.
+        existing_fortran_wrapper_path = os.path.join(output_dir, name, fortran_wrapper_file)
+        fortran_wrapper_path = os.path.join(build_dir, fortran_wrapper_file)
+        existing_python_wrapper_path = os.path.join(output_dir, name, python_wrapper_file)
+        python_wrapper_path = os.path.join(build_dir, python_wrapper_file)
+        # Move the existing wrapper to the new build directory (if it is to be kept).
+        if (os.path.exists(existing_fortran_wrapper_path) and (not wrap)):
+            shutil.move(existing_fortran_wrapper_path, fortran_wrapper_path)
+        if (os.path.exists(existing_python_wrapper_path) and (not wrap)):
+            shutil.move(existing_python_wrapper_path, python_wrapper_path)
+        # Check for the existence of the wrapper files (in the build or output directories).
+        fortran_wrapper_exists = os.path.exists(fortran_wrapper_path)
+        python_wrapper_exists = os.path.exists(python_wrapper_path)
+        # Generate the wrappers for going from python <-> fortran.
+        if (wrap or (not fortran_wrapper_exists) or (not python_wrapper_exists)):
+            fortran_wrapper, python_wrapper = make_wrapper(
+                source_path, build_dir, name)
+            # Add fortran wrapper to dependencies and remove any
+            #  duplicates from the "dependencies" list.
+            dependencies.append( os.path.basename(fortran_wrapper_path) )
+            i = len(dependencies)
+            while (i > 1):
                 i -= 1
-        # Fill all the missing components of the python_wrapper string.
-        python_wrapper = python_wrapper.format(
-            verbose_module = verbose_module,
-            f_compiler = f_compiler,
-            shared_object_name = name,
-            f_compiler_args = str(f_compiler_args),
-            dependencies = dependencies,
-            symbol_files = symbol_files,
-        )
-    # Write the wrapper files if this program is supposed to.
-    if (not fortran_wrapper_exists) or wrap:
-        with open(fortran_wrapper_path, "w") as f: f.write( fortran_wrapper )
-    if (not python_wrapper_exists) or wrap:
-        with open(python_wrapper_path, "w") as f: f.write( python_wrapper )
+                while (dependencies.index(dependencies[i]) < i):
+                    dependencies.pop(dependencies.index(dependencies[i]))
+                    i -= 1
+            # Fill all the missing components of the python_wrapper string.
+            python_wrapper = python_wrapper.format(
+                verbose_module = verbose_module,
+                f_compiler = f_compiler,
+                shared_object_name = name,
+                f_compiler_args = str(f_compiler_args),
+                dependencies = dependencies,
+                symbol_files = symbol_files,
+            )
+        # Write the wrapper files if this program is supposed to.
+        if (not fortran_wrapper_exists) or wrap:
+            with open(fortran_wrapper_path, "w") as f: f.write( fortran_wrapper )
+        if (not python_wrapper_exists) or wrap:
+            with open(python_wrapper_path, "w") as f: f.write( python_wrapper )
 
-    # Make the `__init__.py` for the newly created Python module a link.
-    init_file = os.path.join(build_dir,"__init__.py")
-    if os.path.exists(init_file): os.remove(init_file)
-    print()
-    print(f"Making symlink from '{python_wrapper_file}' to '__init__.py'")
-    print()
-    os.symlink(os.path.join(".", python_wrapper_file), init_file)
-    # Generate the final module path, move into location.
-    final_module_path = os.path.join(output_dir, name)
-    # Move the compiled module to the output directory.
-    print("Moving from:", f"  {build_dir}", "to", f"  {final_module_path}", sep="\n")
-    if not (build_dir == final_module_path):
-        # Remove the existing wrapper module if it exists.
-        if os.path.exists(final_module_path):
-            if (overwrite):
-                print(f" deleting existing directory at '{final_module_path}'..")
-                shutil.rmtree(final_module_path)
-            else:
-                # Keep previous compilation in "old" directory.
-                old_module_path = final_module_path + "_OLD"
-                # Remove old directories permanently.
-                if os.path.exists(old_module_path):
-                    print(f" removing old wrapper of '{name}' at '{old_module_path}'..")
-                    shutil.rmtree(old_module_path)
-                print(f" moving existing directory at '{final_module_path}' to '{old_module_path}'..")
-                shutil.move(final_module_path, old_module_path)
-        # Move the compiled wrapper to the destination.
-        shutil.move(build_dir, final_module_path)
-        # Remove all files (symlinks) that are not dependencies.
-        all_kept_files = set(dependencies) | {fortran_wrapper_file, python_wrapper_file, "__init__.py"}
-        for p in os.listdir(final_module_path):
-            if ((p not in all_kept_files) and (after_dot(p) != 'mod')):
-                print(f" removing unnecessary file '{p}'..")
-                p = os.path.join(final_module_path, p)
-                os.remove(p)
+        # Make the `__init__.py` for the newly created Python module a link.
+        init_file = os.path.join(build_dir,"__init__.py")
+        if os.path.exists(init_file): os.remove(init_file)
+        print()
+        print(f"Making symlink from '{python_wrapper_file}' to '__init__.py'")
+        print()
+        os.symlink(os.path.join(".", python_wrapper_file), init_file)
+        # Generate the final module path, move into location.
+        final_module_path = os.path.join(output_dir, name)
+        # Move the compiled module to the output directory.
+        print("Moving from:", f"  {build_dir}", "to", f"  {final_module_path}", sep="\n")
+        if not (build_dir == final_module_path):
+            # Remove the existing wrapper module if it exists.
+            if os.path.exists(final_module_path):
+                if (overwrite):
+                    print(f" deleting existing directory at '{final_module_path}'..")
+                    shutil.rmtree(final_module_path)
+                else:
+                    # Keep previous compilation in "old" directory.
+                    old_module_path = final_module_path + "_OLD"
+                    # Remove old directories permanently.
+                    if os.path.exists(old_module_path):
+                        print(f" removing old wrapper of '{name}' at '{old_module_path}'..")
+                        shutil.rmtree(old_module_path)
+                    print(f" moving existing directory at '{final_module_path}' to '{old_module_path}'..")
+                    shutil.move(final_module_path, old_module_path)
+            # Move the compiled wrapper to the destination.
+            shutil.move(build_dir, final_module_path)
+            # Remove all files (symlinks) that are not dependencies.
+            all_kept_files = set(dependencies) | {fortran_wrapper_file, python_wrapper_file, "__init__.py"}
+            for p in os.listdir(final_module_path):
+                if ((p not in all_kept_files) and (after_dot(p) != 'mod')):
+                    print(f" removing unnecessary file '{p}'..")
+                    p = os.path.join(final_module_path, p)
+                    os.remove(p)
 
-    print(f"\nFinished making module '{name}'.\n")
-    print("^"*70)
-    print()
+        print(f"\nFinished making module '{name}'.\n")
+        print("^"*70)
+        print()
 
-    # Clean up the the temporary directory if one was created.
-    if temp_dir is not None:
-        try: temp_dir.cleanup()
-        except FileNotFoundError: pass
-        del temp_dir
+        # Clean up the the temporary directory if one was created.
+        if temp_dir is not None:
+            try: temp_dir.cleanup()
+            except FileNotFoundError: pass
+            del temp_dir
 
-    # Re-configure 'fmodpy' to work the way it did before this execution.
-    if (len(kwargs) > 0): load_config(**pre_config)
+        # (Re)Import the module.
+        sys.path.insert(0, output_dir)
+        try:
+            module = importlib.import_module(name)
+            module = importlib.reload(module)
+        finally:
+            sys.path.pop(0)
+    # Regardless of errors, reconfigure 'fmodpy' to work the way it did before this execution.
+    finally:
+        if (len(kwargs) > 0): load_config(**pre_config)
 
-    # (Re)Import the module.
-    sys.path.insert(0, output_dir)
-    module = importlib.import_module(name)
-    module = importlib.reload(module)
-    sys.path.pop(0)
     # Return the module to be stored as a variable.
     return module
+
 
 # ====================================================================
 
@@ -515,7 +520,7 @@ def load_symbol(symbol, filename_includes=""):
             print(f" checking for '{symbol}' in '{f}' with '{symbol_command.format(path=f)}'.")
             symbols = str(subprocess.run(symbol_command.format(path=f), shell=True,
                                          capture_output=True).stdout, "utf8")
-            if (re.search(r"(\W|^)"+symbol+r"(\W|$)", symbols) is not None):
+            if (re.search(r"(\W|^)(_?)"+symbol+r"(_?)(\W|$)", symbols) is not None):
                 symbol_file = f
                 break
         # Recurse into directories (up to provided max depth).

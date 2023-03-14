@@ -16,8 +16,9 @@ class Argument:
     optional = False # May be excluded from input.
     save = False # Save value between executions.
     value = False # Pass by value, not by reference.
-    pointer = False # Pass by pointer, not by reference.
     parameter = False # Whether this argument is a parameter (set at compile time)
+    target = False # Whether this argument is a valid pointer target (set at compile time).
+    pointer = False # Whether this argument is a pointer (set at compile time).
     type_len = False # Whether this argument has the LEN parameter (in a derived TYPE)
     type_kind = False # Whether this argument has the KIND parameter (in a derived TYPE)
     dimension = None # If array, this list describes the shape and size.
@@ -720,10 +721,18 @@ class Argument:
             elif (line[0] == "SAVE"):
                 line.pop(0)
                 self.save = True
-            # Read PARAMETER (discard this)
+            # Read PARAMETER
             elif (line[0] == "PARAMETER"):
                 line.pop(0)
                 self.parameter = True
+            # Read TARGET
+            elif (line[0] == "TARGET"):
+                line.pop(0)
+                self.target = True
+            # Read POINTER
+            elif (line[0] == "POINTER"):
+                line.pop(0)
+                self.pointer = True
             # Read EXTERNAL (discard this)
             elif (line[0] == "EXTERNAL"): 
                 line.pop(0)

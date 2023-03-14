@@ -2,27 +2,27 @@ import os, sysconfig
 import numpy as NP
 
 # Default configurable variables.
-omp                = False
-blas               = False
-lapack             = False
-verbose            = False
-verbose_module     = True
-autocompile        = True
-wrap               = True
-rebuild            = False
-show_warnings      = True
-debug_line_numbers = False
-implicit_typing    = False
-end_is_named       = True
-overwrite          = False # hard-delete destination directory if it already exists
-log_file           = os.devnull
-f_compiler         = "gfortran"
-f_compiler_args    = ["-fPIC", "-shared", "-O3"]
-link_omp           = ["-fopenmp"]
-link_blas          = ["-lblas"]
-link_lapack        = ["-lblas", "-llapack"]
-home_directory     = os.path.expanduser("~")
-libraries          = NP.__path__ + [
+omp                = False # True if OpenMP libraries should be linked for the given program.
+blas               = False # True if BLAS should be linked for the given program.
+lapack             = False # True if LAPACK should be linked for the given program.
+verbose            = False # True if fmodpy should show logs during wrapper construction.
+verbose_module     = True # True if the generated wrapper module should print to stdout when it is compiling.
+autocompile        = True # True if fmodpy should attempt to automatically compile Fortran source files while creating the wrapper.
+wrap               = True # True if fmodpy should build the wrapper (Fortran file and Python file that constitutes the translation layer).
+rebuild            = False # True if the source file should be parse and wrapper built regardless of file modification times.
+show_warnings      = True # 
+debug_line_numbers = False # True if fmodpy source line numbers should be prepended to printed logs.
+implicit_typing    = False # True if types of undeclared arguments should be inferred.
+end_is_named       = True # True if the END of code blocks includes the name of the block.
+overwrite          = False # hard-delete destination directory if it already exists.
+log_file           = os.devnull # The "file" object that logging statements should be directed.
+f_compiler         = "gfortran" # The command used to execute the fortran program.
+f_compiler_args    = ["-fPIC", "-shared", "-O3"] # The arguments for compiling a production shared object.
+link_omp           = ["-fopenmp"] # The arguments for enabling OpenMP support at compile and link times.
+link_blas          = ["-lblas"] # The argument(s) for enabling BLAS routines at link time.
+link_lapack        = ["-lblas", "-llapack"] # The argument(s) for enabling LAPACK routines at link time.
+home_directory     = os.path.expanduser("~") # The user home directory to search for a global configuration file.
+libraries          = NP.__path__ + [ # Paths to be checked for dependent "symbols" / routine defintions.
     "/usr/lib",
     "/lib",
     "/usr/lib64",
@@ -32,11 +32,11 @@ libraries          = NP.__path__ + [
     "/opt/homebrew/Cellar/openblas",
     "/opt/homebrew/Cellar/libomp"
 ]
-library_recursion  = 2
-library_extensions = ["so", "dylib"]
-symbol_command     = 'nm -gU "{path}" 2> /dev/null || nm -gD "{path}" 2> /dev/null'
-config_file        = ".fmodpy.py"
-wait_warning_sec   = 5 # number of seconds to wait before warning about automatic compilation
+library_recursion  = 2 # Maximum recursion depth when searching libraries for symbol definitions.
+library_extensions = ["so", "dylib"] # Files to be checked as linkable shared libraries.
+symbol_command     = 'nm -gU "{path}" 2> /dev/null || nm -gD "{path}" 2> /dev/null' # Commad used to enumerate available symbols in a shared object.
+config_file        = ".fmodpy.py" # Name of the fmodpy configuration file to look for.
+wait_warning_sec   = 5 # Number of seconds to wait before warning about automatic compilation.
 
 # --------------------------------------------------------------------
 #      Development globals, not intended to be changed by users.
