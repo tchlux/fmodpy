@@ -71,7 +71,7 @@ class Code:
                     from fmodpy.config import end_is_named
                     if end_is_named:
                         from fmodpy.exceptions import ParseError
-                        raise(ParseError("Encountered unexpected 'END' without block type (e.g. SUBROUTINE, MODULE)."))
+                        raise(ParseError("Encountered unexpected 'END' without block type (e.g. SUBROUTINE, MODULE).\n  If you are processing fixed format Fortran and expect to have unnamed END statements, include the\n  configuration argument `end_is_named=False` when calling `fimport` for this particular library."))
                     else:
                         list_of_lines.pop(0)
                         ended = True

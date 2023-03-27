@@ -311,6 +311,9 @@ def make_wrapper(source_file, build_dir, module_name):
     # Make a simplified version of the fortran file that only contains
     # the relevant syntax to defining a wrapper in python.
     is_fixed_format = after_dot(source_file) == "f"
+    if (is_fixed_format):
+        import fmodpy
+        fmodpy.config.end_is_named = False
     simplified_file = simplify_fortran_file(source_file, fixed_format=is_fixed_format)
     # Write the simplified file to the build directory.
     simplified_file_path = os.path.join(build_dir, "fmodpy_simplified_"+os.path.basename(source_file))
