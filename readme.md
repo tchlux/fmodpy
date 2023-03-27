@@ -4,7 +4,19 @@
 
 <p align="center">
 An easy-to-use Fortran wrapper for Python.
+<br>
+No source code changes, no manual specification files, just import like it's native.
 </p>
+
+```python
+# Automatically generate a wrapper, compile, link, and import into Python.
+fortran_module = fmodpy.fimport('MODULE.f08', dependencies=['LIB.f90', 'BLAS.f'])
+#   - handles any Fortran source, modern, or fixed format F77
+#   - reads the source to determine the interface specification
+#   - includes Fortran documentation in the wrapped code
+#   - produces a stand-alone and distrutable Python module with only numpy as dependency
+```
+
 
 Modern Fortran is capable of being integrated with Python near
 seamlessly allowing for rapid transition between prototype and
@@ -26,7 +38,7 @@ edge high performance computing platforms.
 
 ## INSTALLATION:
 
-    $ python3 -m pip install fmodpy
+    python3 -m pip install fmodpy
 
   This code expects that you already have a Fortran compiler
   installed. By default most machines do not have a Fortran compiler
@@ -65,24 +77,28 @@ module = fmodpy.fimport("<path to fortran source file>")
 
   Run `fmodpy` from the command line with:
 
-    $ python3 -m fmodpy <fortran source file> [<setting1>=<value1>] [<setting2>=<value2] ...
+  ```shell
+  python3 -m fmodpy "<fortran-source-file>" [setting1="<value1>"] [setting2="<value2>"] ...
+  ```
 
   The result will be a directory containing a Python package that
   wraps and calls the underlying Fortran code.
 
   Execute with no arguments to get help documentation. For a list of
-  the different configuration options, run the command `python3 -c
-  "import fmodpy; fmodpy.configure()"`. 
+  the different configuration options, run the command:
+  ```shell
+  python3 -c "import fmodpy; fmodpy.configure()"
+  ```
 
 
 ## SUPPORTED FORTRAN:
 
- - `INTEGER` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
- - `REAL` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals
+ - `INTEGER` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals, pointers
+ - `REAL` 32 and 64 bit, (allocatable / assumed shape) arrays, optionals, pointers
  - `CHARACTER` singletons and assumed-shape arrays, but *no* support for `LEN` behaviors
- - `COMPLEX` 64 and 128 bit, (allocatable / assumed shape) arrays, optionals
- - `LOGICAL`  singletons, (allocatable / assumed shape) arrays, optionals
- - `TYPE` singletons, (allocatable / assumed shape) arrays, and optionals (type must have `BIND(C)` attribute)
+ - `COMPLEX` 64 and 128 bit, (allocatable / assumed shape) arrays, optionals, pointers
+ - `LOGICAL`  singletons, (allocatable / assumed shape) arrays, optionals, pointers
+ - `TYPE` singletons, (allocatable / assumed shape) arrays, optionals, and pointers (type must have `BIND(C)` attribute)
  - `SUBROUTINE` standard behaviors (automatically drops `PURE` and `RECURSIVE` prefixes)
  - `FUNCTION` standard behaviors (wrapped with a standard subroutine call)
  - `MODULE` wrapper that behaves like an instantiated Python class with property-based accessors for internal attributes
