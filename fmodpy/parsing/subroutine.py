@@ -173,6 +173,8 @@ class Subroutine(Code):
         lines += ["  "+l for l in self.uses]
         if any((a.allocatable and a._is_output()) for a in self.arguments):
             lines += ["  USE ISO_FORTRAN_ENV, ONLY: INT64"]
+        if any(a._is_optional() for a in self.arguments):
+            lines += ["  USE ISO_C_BINDING, ONLY: C_BOOL"]
         # Check if this is in a module.
         in_module = (self.parent is not None) and (self.parent.type == "MODULE")
         if (in_module): lines += [f"  USE {self.parent.name}, ONLY: {self.name}"]

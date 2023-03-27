@@ -90,7 +90,7 @@ class Argument:
     def fort_declare(self):
         lines = []
         if (self.optional):
-            lines.append(f"LOGICAL, INTENT(IN) :: {self.name}_PRESENT")
+            lines.append(f"LOGICAL(KIND=C_BOOL), INTENT(IN) :: {self.name}_PRESENT")
         # If this is an allocatable, the sizes have to be given as output.
         size_type = "IN" if not self.allocatable else "OUT"
         # Add extra arguments for the dimension sizes.
@@ -444,8 +444,9 @@ class Argument:
         temp.name += "_LOCAL"
         # Get allocatable present input.
         if (self.allocatable):
+            decs.insert(0,"USE ISO_C_BINDING, ONLY: C_BOOL")
             args.append(f'{self.name}_ALLOCATED')
-            decs.append(f'LOGICAL, INTENT(OUT) :: {self.name}_ALLOCATED')
+            decs.append(f'LOGICAL(KIND=C_BOOL), INTENT(OUT) :: {self.name}_ALLOCATED')
             lines += [f'{self.name}_ALLOCATED = ALLOCATED({self.name})',
                       f'IF (.NOT. {self.name}_ALLOCATED) RETURN']
 

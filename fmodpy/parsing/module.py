@@ -72,6 +72,8 @@ class Module(Code):
         lines += self.uses
         if any((a.allocatable and a._is_output()) for a in self.arguments):
             lines += ['  USE ISO_FORTRAN_ENV, ONLY: INT64']
+        if any(a._is_optional() for a in self.arguments):
+            lines += ['  USE ISO_C_BINDING, ONLY: C_BOOL']
         # Enforce no implicit typing (within this code).
         lines += [f'  IMPLICIT NONE']
         lines += ['']
