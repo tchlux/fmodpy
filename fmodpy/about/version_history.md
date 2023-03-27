@@ -22,3 +22,4 @@
 | 1.5.2<br>July 2022 | Added some additional standard library search paths <br> and renamed 'delete_destination' as 'overwrite'. <br> Also changed default configurations that were <br> strings being split into proper Python lists. |
 | 1.5.3<br>March 2023 | Minor update. Changed some logic in fimport to more <br> correctly support different system configurations. <br> Added comments drescribing most configurable <br> settings. Added support for TARGET and POINTER <br> types. |
 | 1.5.4<br>March 2023 | Added support for '$' as a line continuation <br> character in the fifth column of fixed format files. <br> Switched 'LOGICAL' types to be 'C_BOOL' |
+| 1.5.5<br>March 2023 | Updated error message for unnamed END statements to <br> include configuration suggestion. Made fixed format <br> Fortran files set 'end_is_named=False' by default. |
