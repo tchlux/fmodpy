@@ -45,15 +45,14 @@ def clean_text(text, replacements=FORT_TEXT_REPLACEMENTS, fixes=FORT_TEXT_FIXES)
 
 # Read a fortran file, store it as single lines 
 # (without leading and trailing whitespace) and return
-def simplify_fortran_file(in_file, old_fortran=False):
+def simplify_fortran_file(in_file, fixed_format=False):
     from fmodpy.parsing import ACCEPTABLE_LINE_STARTS, \
         LINE_STARTS_TO_REMOVE, IMMEDIATELY_EXCLUDE
-        
     with open(in_file) as f:
         fort_file = []
         curr_line = ""
         for line in f.readlines():
-            if (old_fortran) and (len(line) >0) and (line[0].upper() == "C"):
+            if (fixed_format) and (len(line) >0) and (line[0].upper() == "C"):
                 line = "!" + line[1:]
             # Split out the comments from the line
             comment_start = line.find("!") if (line.find("!") != -1) else len(line)
@@ -68,10 +67,10 @@ def simplify_fortran_file(in_file, old_fortran=False):
             lines = line.split(";")
             for line in lines:
                 if len(line.strip()) == 0: continue
-                if (old_fortran):
+                if (fixed_format):
                     line = line[:72]
                     # Line continuation character in column 5
-                    if (len(line) > 5) and (line[5] in ["1","*"]):
+                    if (len(line) > 5) and (line[5] in {"1","*","$"}):
                         line = "&" + line[6:]
                         # Retro-actively pop the previous line for continuation
                         if len(curr_line) == 0: curr_line = fort_file.pop(-1)
