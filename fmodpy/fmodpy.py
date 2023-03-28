@@ -83,7 +83,8 @@ def fimport(input_fortran_file, name=None, build_dir=None,
     if (len(kwargs) > 0): load_config(**kwargs) # <- assigns given configuration
     # Import some locally used settings.
     from fmodpy.config import wrap, rebuild, autocompile, \
-        verbose_module, f_compiler, f_compiler_args, overwrite
+        verbose_module, f_compiler, f_compiler_args, shared_object_args, \
+        optimization_level, overwrite
 
     # Since the global configuration has been modified, wrap all operations in a try-finally.
     try:
@@ -183,9 +184,9 @@ def fimport(input_fortran_file, name=None, build_dir=None,
         else:
             symbol_files = []
 
-        # Automatically compile fortran files.
+        # Automatically compile fortran files (raises code errors, finds dependencies).
         if autocompile:
-            print("Attempting to autocompile..")
+            print("Attempting to autocompile any dependencies..")
             built, failed = autocompile_files(build_dir, dependencies)
             dependencies = dependencies + [f for f in built if (f not in dependencies)]
             print()
@@ -225,7 +226,9 @@ def fimport(input_fortran_file, name=None, build_dir=None,
                 verbose_module = verbose_module,
                 f_compiler = f_compiler,
                 shared_object_name = name,
-                f_compiler_args = str(f_compiler_args),
+                f_compiler_args = str(
+                    shared_object_args + [optimization_level] + f_compiler_args
+                ),
                 dependencies = dependencies,
                 symbol_files = symbol_files,
             )
@@ -269,7 +272,7 @@ def fimport(input_fortran_file, name=None, build_dir=None,
                 if ((p not in all_kept_files) and (after_dot(p) != 'mod')):
                     print(f" removing unnecessary file '{p}'..")
                     p = os.path.join(final_module_path, p)
-                    os.remove(p)
+                    if (os.path.exists(p)): os.remove(p)
 
         print(f"\nFinished making module '{name}'.\n")
         print("^"*70)
@@ -347,8 +350,8 @@ def autocompile_files(build_dir, dependencies):
     import os, time
     from fmodpy.parsing import after_dot
     # Get configuration parameters.
-    from fmodpy.config import run, f_compiler, f_compiler_args, \
-        wait_warning_sec, GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
+    from fmodpy.config import run, f_compiler, f_compiler_args, shared_object_args, \
+        optimization_level, wait_warning_sec, GET_SIZE_PROG_FILE, GET_SIZE_EXEC_FILE
     # Make compilation option substititions for speed.
     f_compiler_args = [arg if (arg not in {"-O3", "-O2", "-O1"}) else "-O0"
                        for arg in f_compiler_args]
@@ -420,8 +423,8 @@ def autocompile_files(build_dir, dependencies):
             print(f"Compiling '{f}'.. ")
             # Reuse the "GET_SIZE_EXEC_FILE" name for compilation checks.
             compiled_file_path = os.path.join(build_dir, GET_SIZE_EXEC_FILE)
-            cmd = [f_compiler] + f_compiler_args + ["-o", compiled_file_path] + \
-                  [d for d in ordered_depends if (d != f)] + [f]
+            cmd = [f_compiler] + shared_object_args + f_compiler_args + [optimization_level] + \
+                ["-o", compiled_file_path] + [d for d in ordered_depends if (d != f)] + [f]
             print(f" {' '.join(cmd)}".replace(build_dir,"."))
             code, stdout, stderr = run(cmd, cwd=build_dir)
             # Update the list of existing mod files.

@@ -1,5 +1,11 @@
 import os, sysconfig
-import numpy as NP
+
+# Try to include the NumPy path, ignore if it doesn't exist.
+try:
+    import numpy as NP
+    numpy_path = NP.__path__
+except:
+    numpy_path = []
 
 # Default configurable variables.
 omp                = False # True if OpenMP libraries should be linked for the given program.
@@ -17,12 +23,14 @@ end_is_named       = True # True if the END of code blocks includes the name of 
 overwrite          = False # hard-delete destination directory if it already exists.
 log_file           = os.devnull # The "file" object that logging statements should be directed.
 f_compiler         = "gfortran" # The command used to execute the fortran program.
-f_compiler_args    = ["-fPIC", "-shared", "-O3"] # The arguments for compiling a production shared object.
+f_compiler_args    = [] # Any special arguments for compiling.
+optimization_level = "-O3" # The level of compiler optimization to use for the final module.
+shared_object_args = ["-fPIC", "-shared"] # All arguments required for a functioning shared object.
 link_omp           = ["-fopenmp"] # The arguments for enabling OpenMP support at compile and link times.
 link_blas          = ["-lblas"] # The argument(s) for enabling BLAS routines at link time.
 link_lapack        = ["-lblas", "-llapack"] # The argument(s) for enabling LAPACK routines at link time.
 home_directory     = os.path.expanduser("~") # The user home directory to search for a global configuration file.
-libraries          = NP.__path__ + [ # Paths to be checked for dependent "symbols" / routine defintions.
+libraries          = numpy_path + [ # Paths to be checked for dependent "symbols" / routine defintions.
     "/usr/lib",
     "/lib",
     "/usr/lib64",
@@ -33,7 +41,7 @@ libraries          = NP.__path__ + [ # Paths to be checked for dependent "symbol
     "/opt/homebrew/Cellar/libomp"
 ]
 library_recursion  = 2 # Maximum recursion depth when searching libraries for symbol definitions.
-library_extensions = ["so", "dylib"] # Files to be checked as linkable shared libraries.
+library_extensions = ["so", "dylib", "dll"] # Files to be checked as linkable shared libraries.
 symbol_command     = 'nm -gU "{path}" 2> /dev/null || nm -gD "{path}" 2> /dev/null' # Commad used to enumerate available symbols in a shared object.
 config_file        = ".fmodpy.py" # Name of the fmodpy configuration file to look for.
 wait_warning_sec   = 5 # Number of seconds to wait before warning about automatic compilation.
@@ -46,7 +54,7 @@ BOOL_CONFIG_VARS = ["omp", "blas", "lapack", "verbose", "autocompile",
                     "wrap", "rebuild", "show_warnings",
                     "debug_line_numbers", "implicit_typing",
                     "end_is_named", "overwrite"]
-LIST_CONFIG_VARS = ["f_compiler_args", "link_omp", "link_blas",
+LIST_CONFIG_VARS = ["f_compiler_args", "shared_object_args", "link_omp", "link_blas",
                     "link_lapack", "libraries", "library_extensions"]
 # File related maniplation arguments
 PY_EXT = ".py"
@@ -195,6 +203,12 @@ def load_config(**kwargs):
         for l in config["link_omp"]:
             if (l not in config["f_compiler_args"]):
                 config["f_compiler_args"] += [l]
+
+    # Make sure any 'f_compiler_args' are not redundant with other args.
+    config["f_compiler_args"] = [
+        a for a in config["f_compiler_args"]
+        if a not in [config["optimization_level"]] + config["shared_object_args"]
+    ]
 
     # Set all of the configuration variables as module-wide globals.
     for var in config: fmodpy_config[var] = config[var]

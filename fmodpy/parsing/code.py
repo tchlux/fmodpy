@@ -248,8 +248,8 @@ class Code:
             code, stdout, stderr = run([size_exec_path])
             if (code != 0): raise(NotImplementedError("Argument byte-size checking program failed, unexpected."))
             # Remove the size program.
-            os.remove(size_prog_path)
-            os.remove(size_exec_path)
+            if os.path.exists(size_prog_path): os.remove(size_prog_path)
+            if os.path.exists(size_exec_path): os.remove(size_exec_path)
             # Read the sizes from the output.
             sizes = [s.strip() for s in stdout if s.strip().isnumeric()]
             # Assign the sizes to the appropriate arguments.
