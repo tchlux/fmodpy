@@ -23,3 +23,4 @@
 | 1.5.3<br>March 2023 | Minor update. Changed some logic in fimport to more <br> correctly support different system configurations. <br> Added comments drescribing most configurable <br> settings. Added support for TARGET and POINTER <br> types. |
 | 1.5.4<br>March 2023 | Added support for '$' as a line continuation <br> character in the fifth column of fixed format files. <br> Switched 'LOGICAL' types to be 'C_BOOL' |
 | 1.5.5<br>March 2023 | Updated error message for unnamed END statements to <br> include configuration suggestion. Made fixed format <br> Fortran files set 'end_is_named=False' by default. |
+| 1.5.6<br>March 2023 | Making some 'os.remove' operations safer by checking <br> for path existence. Refactored 'f_compiler_args' <br> into two more parts, 'optimization_level' and <br> 'shared_object_args', so that the typical '-fPIC <br> -shared' do not need to be included when adding <br> custom compilation arguments. |
