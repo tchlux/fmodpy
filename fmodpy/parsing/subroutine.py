@@ -178,6 +178,9 @@ class Subroutine(Code):
         # Check if this is in a module.
         in_module = (self.parent is not None) and (self.parent.type == "MODULE")
         if (in_module): lines += [f"  USE {self.parent.name}, ONLY: {self.name}"]
+        # If this is module, we might need to USE it to get PARAMETER values.
+        if (self.type == "MODULE"):
+            lines += [f"  USE {self.name}"]
         # Add any type definitions from parents that are used here.
         known_types = {t.name for t in self.types}
         for l in self.uses:

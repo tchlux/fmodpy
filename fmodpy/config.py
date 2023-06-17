@@ -63,6 +63,7 @@ PYTHON_WRAPPER_EXT = "_python_wrapper"
 FORT_WRAPPER_EXT = "_c_wrapper"+FORT_EXT
 GET_SIZE_PROG_FILE = "fmodpy_get_size"+FORT_EXT
 GET_SIZE_EXEC_FILE = "fmodpy_get_size"
+GET_SIZE_VARIABLE_PREFIX = "SIZE_OF_"
 # --------------------------------------------------------------------
 
 # Automatically handle printing for status updates.

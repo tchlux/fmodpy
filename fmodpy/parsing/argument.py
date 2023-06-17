@@ -67,6 +67,8 @@ class Argument:
             name += "_LOCAL"
         elif (self.parent is not None) and (self.parent.name == self.name):
             name += "_RESULT"
+        elif ((self.type == "CHARACTER") and self.kind_prefix.startswith("LEN")):
+            name += "_STRING"
         return name
 
     # Names of arguments that will be given to the Fortran wrapper.
@@ -124,6 +126,12 @@ class Argument:
             temp_arg.show_intent = True
             temp_arg.type = "INTEGER"
             temp_arg.kind = "INT64"
+        # Make sure characters are passed as arrays.
+        if ((self.type == "CHARACTER") and self.kind_prefix.startswith("LEN")):
+            lines.append(f"INTEGER :: {self.name}_COPY_COUNTER")
+            lines.append(f"CHARACTER(LEN={self.name}_DIM_1) :: {self.name}_STRING")
+            temp_arg.kind_prefix = "KIND="
+            temp_arg.kind = ""
         # Add the actual definition of this argument.
         lines.append(str(temp_arg))
         # Reset the dimension, if it had one beforehand.
@@ -132,7 +140,18 @@ class Argument:
         return lines
 
     # Lines of Fortran code that must be executed before the call.
-    def fort_prepare(self): return []
+    def fort_prepare(self):
+        lines = []
+        # Copy strings in to local variables from arrays.
+        is_input = ("IN" in self.intent) or (self.intent == "")
+        if ((self.type == "CHARACTER")
+            and self.kind_prefix.startswith("LEN")
+            and (is_input)
+        ):
+            lines.append(f"DO {self.name}_COPY_COUNTER = 1, SIZE({self.name},1)")
+            lines.append(f"  {self.name}_STRING({self.name}_COPY_COUNTER:{self.name}_COPY_COUNTER) = {self.name}({self.name}_COPY_COUNTER)")
+            lines.append(f"END DO")
+        return lines
 
     # Lines of Fortran code that must be executed after the call.
     def fort_after(self, present=True):
@@ -149,6 +168,11 @@ class Argument:
             if present:
                 first_pos = ",".join(["1"]*len(self.dimension))
                 lines.append(f"{self.fort_input()[-1]} = LOC({self.function_safe_name()}({first_pos}))")
+        # Copy strings out back into character arrays.
+        if (is_output and (self.type == "CHARACTER") and self.kind_prefix.startswith("LEN")):
+            lines.append(f"DO {self.name}_COPY_COUNTER = 1, SIZE({self.name},1)")
+            lines.append(f"  {self.name}({self.name}_COPY_COUNTER) = {self.name}_STRING({self.name}_COPY_COUNTER:{self.name}_COPY_COUNTER)")
+            lines.append(f"END DO")
         # Return the list of lines.
         return lines
 
@@ -223,6 +247,11 @@ class Argument:
                        "    import warnings",
                       f"    warnings.warn(\"The provided argument '{py_name}' was not an f_contiguous NumPy array of type '{self.c_type_array}' (or equivalent). Automatically converting (probably creating a full copy).\")",
                       f"    {py_name} = numpy.asarray({py_name}, dtype={self.c_type_array}, order='F')",]
+            # If this is a dimensioned CHARACTER, then remove the warning and ensure `.shape[0]` exists.
+            if (self.type == "CHARACTER"):
+                lines.pop(-2)
+                lines.pop(-2)
+                lines[-1] += ".reshape(-1)"
         # If this is an output-only allocatable, declare a local pointer.
         elif ((not self.optional) and self._is_output() and self.allocatable):
             lines.append(f"{py_name} = ctypes.c_void_p()")
@@ -281,8 +310,15 @@ class Argument:
     # The lines of Python code that must be executed after the Fortran call.
     def py_after(self):
         lines = []
+        py_name = self.name.lower()
+        # Handle characters with "LEN" by assuming it's one string.
+        if ((self.type == "CHARACTER")
+            and self.kind_prefix.startswith("LEN")
+            and self._is_output()
+        ):
+            lines += [f"{py_name} = ''.join({py_name}.astype(str))"]
+        # Handle allocatable arrays.
         if self.allocatable and self._is_output():
-            py_name = self.name.lower()
             # This must be an array argument and it must be 'INTENT(OUT)'.
             if (self.dimension is None): raise(NotImplementedError)
             # Get the pointer to the first index.
@@ -478,6 +514,9 @@ class Argument:
         lines = ["  "+l for l in lines]
         # Add the subroutine line (with all arguments).
         lines.insert(0, f"SUBROUTINE {self.parent.name}_GET_{self.name}({', '.join(args)}) BIND(C)")
+        # Assume that all needed types are in the parent.
+        if (self.type == "TYPE"):
+            lines.insert(1, f"  USE {self.parent.name}, ONLY: {self.kind}")
         # Add the end of the subroutine declaration line.
         lines.append(f"END SUBROUTINE {self.parent.name}_GET_{self.name}")
         return lines
@@ -516,6 +555,10 @@ class Argument:
         lines = ["  "+l for l in lines]
         # Add the subroutine line (with all arguments).
         lines.insert(0, f"SUBROUTINE {self.parent.name}_SET_{self.name}({', '.join(args)}) BIND(C)")
+        # Assume that all needed types are in the parent.
+        if (self.type == "TYPE"):
+            lines.insert(1, f"  USE {self.parent.name}, ONLY: {self.kind}")
+        # Make sure self is used from parent too.
         lines.insert(1, f"  USE {self.parent.name}, ONLY: {self.name}")
         # Add the end of the subroutine declaration line.
         lines.append(f"END SUBROUTINE {self.parent.name}_SET_{self.name}")
@@ -576,6 +619,23 @@ class Argument:
         sizes = []
         for size in self.dimension:
             size = size.lower().replace(" ","")
+            # Replace all occurrences of "LEN(<argument>)"
+            #  with a Python NumPy equivelent.
+            while "len(" in size:
+                start_index = size.index("len(") + len("len(")
+                before_call = size[:start_index-len("len(")]
+                parens = 1
+                for index in range(start_index, len(size)):
+                    if size[index] == "(": parens += 1
+                    elif size[index] == ")": parens -= 1
+                    if parens <= 0: break
+                argument = size[start_index:index]
+                after_call = size[index+len(")"):]
+                # Now "argument" contains whatever was inside the parenthesis
+                #  and passed into the `LEN(...)` function in Fortran.
+                argument = argument.strip()
+                # Replacement.
+                size = before_call + argument + ".shape[0]" + after_call
             # Replace all occurrences of "SIZE(<argument>)"
             #   with a Python NumPy equivalent array syntax.
             while "size(" in size:
@@ -676,12 +736,18 @@ class Argument:
         if (len(line) == 0): return
         # Parse the remainder of the declaration line.
         # 
-        # Get the KIND declaration, if it was given.
+        # Get the KIND or LEN declaration, if it was given.
         group, line = pop_group(line)
         if (len(group) > 0):
-            if (tuple(group[:2]) == ("KIND","=")):
+            if (tuple(group[:2]) == ("LEN", "=")):
                 group = group[2:]
-            self.kind = " ".join(group)
+                self.kind_prefix = "LEN="
+                self.kind = " ".join(group)
+            else:
+                if (tuple(group[:2]) == ("KIND","=")):
+                    group = group[2:]
+                self.kind = " ".join(group)
+    
         # The rest can come in any order, so loop over possibilities.
         while (len(line) > 0):
             # Skip commas.

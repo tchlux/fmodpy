@@ -25,6 +25,11 @@ def test():
     result = fort.test_simple_character(a, b=out, c=ord('0'))
     assert(all(result.view('uint8') == [1, 2, 0, 1, 2, 0, 1, 2]))
 
+    # Check for string copy in and out correctly.
+    a = "abc"
+    b = fort.test_string(a)
+    assert(a == b)
+
     # End specific testing code.
     # ---------------------------------------------------------------
     print("passed", flush=True)

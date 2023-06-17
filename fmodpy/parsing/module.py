@@ -165,7 +165,7 @@ class Module(Code):
         # Remove any things not declared public if this MODULE is private.
         if (self.status == "PRIVATE"):
             public = set(self.public)
-            for attr in ("interfaces","types","subroutines","functions"):
+            for attr in ("interfaces","types","subroutines","functions","arguments"):
                 codes = getattr(self,attr)
                 to_remove = [i for (i,c) in enumerate(codes) if (c.name not in public)]
                 for i in reversed(to_remove): codes.pop(i)

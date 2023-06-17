@@ -16,4 +16,7 @@ class Character(Argument):
             from fmodpy.config import show_warnings
             if show_warnings:
                 import warnings
-                warnings.warn("Fortran CHARACTER arrays are not supported yet. Raise an issue with an example to encourage development.")
+                warnings.warn("Fortran CHARACTER arrays are not formally supported yet. Raise an issue with an example to encourage development.")
+        # If there is a "len", make it the first dimension.
+        if (self.kind_prefix.startswith("LEN")):
+            self.dimension = [self.kind] + (self.dimension if self.dimension is not None else [])

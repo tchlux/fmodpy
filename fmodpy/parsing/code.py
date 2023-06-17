@@ -180,7 +180,7 @@ class Code:
         # has arguments inside of it, evaluate their sizes.
         if hasattr(self, "arguments"):
             # Evaluate the size of all arguments for this routine.
-            size_prog =  "PROGRAM GET_SIZE\n"
+            size_prog =  "PROGRAM GET_SIZE\n  USE ISO_C_BINDING, ONLY: C_SIZEOF\n"
             # Add a use line for the module this is in (if it is inside one).
             if (self.parent is not None):
                 # If the parent is a module, assume access to it with a USE.
@@ -189,6 +189,9 @@ class Code:
                 # Add any used modules by the parent (because this has access to those).
                 if (hasattr(self.parent, "uses")):
                     for line in self.parent.uses: size_prog += f"  {line}\n"
+            # If this is module, we might need to USE it to get PARAMETER values.
+            if (self.type == "MODULE"):
+                size_prog += f"  USE {self.name}\n"
 
             # # If this is a TYPE, then add the type declaration.
             # if (self.type == "TYPE"):
@@ -196,30 +199,35 @@ class Code:
 
             # If this is not a TYPE, then it might have USES statements.
             if hasattr(self, "uses"):
-                for line in sorted(self.uses): size_prog += line+"\n"
+                for line in sorted(self.uses): size_prog += f"  {line}\n"
             # Get the unique argument type:kind pairs, all arguments as values.
             unique_types_and_kinds = {}
             for arg in self.arguments:
                 # Skip "TYPE" arguments, their sizes are evaluated separately.
                 if (arg.type == "TYPE"): continue
-                # Append a unique identifier to "RESULT" for functions.
-                if (hasattr(self, "result") and (arg.name == self.name)):
-                    arg.name += "_result"
+                # Character arguments with "LEN" are size = 1.
+                if ((arg.type == "CHARACTER") and (arg.kind_prefix.startswith("LEN"))):
+                    arg.size = "1"
+                    continue
+                # Generate a unique lookup for this argument type and kind.
                 key = (arg.type,arg.kind)
                 unique_types_and_kinds[key] = unique_types_and_kinds.get(key,[]) + [arg]
+
+            from fmodpy.config import GET_SIZE_VARIABLE_PREFIX
             # Add all unique (type,kind) arguments to the size check program.
             for (t,k) in sorted(unique_types_and_kinds):
                 # Create a singleton argument of the same type to measure size.
                 arg = unique_types_and_kinds[(t,k)][0]
                 temp_arg = type(arg)([arg.type])
-                temp_arg.name = arg.function_safe_name()
+                temp_arg.name = GET_SIZE_VARIABLE_PREFIX + arg.function_safe_name()
+                temp_arg.kind_prefix = arg.kind_prefix
                 temp_arg.kind = arg.kind
                 temp_arg.show_intent = False
                 size_prog += f"  {temp_arg}\n"
             # Add print statements (printing the sizes).
             for k in sorted(unique_types_and_kinds):
-                name = unique_types_and_kinds[k][0].name
-                size_prog += f"  WRITE (*,*) SIZEOF({name})\n"
+                name = GET_SIZE_VARIABLE_PREFIX + unique_types_and_kinds[k][0].name
+                size_prog += f"  WRITE (*,*) C_SIZEOF({name})\n"
             # End the program file.
             size_prog += "END PROGRAM GET_SIZE\n"
             # Take the size program string and make sure all lines 
