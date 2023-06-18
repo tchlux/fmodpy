@@ -309,6 +309,7 @@ class Subroutine(Code):
     # Generate Python code that accesses this Subroutine.
     def generate_python(self, type_blocks=None):
         from fmodpy.config import fmodpy_print as print
+        from fmodpy.parsing.file import Fortran
         lines = [ '',
                   "# ----------------------------------------------",
                  f"# Wrapper for the Fortran subroutine {self.name}",
@@ -360,9 +361,21 @@ class Subroutine(Code):
             class_name = type_names.pop(0).lower()
             if (':' in type_names):
                 type_names = type_names[type_names.index(':')+1:]
+            # Get the parent file (to see what types are defined here).
+            parent_file = self.parent
+            while not isinstance(parent_file, Fortran):
+                parent_file = parent_file.parent
+            in_file_types = set()
+            for t in parent_file.types:
+                # TODO: Not sure what "class_name" is for parent file, using "".
+                in_file_types.add(("",t.name))  
+            for m in parent_file.modules:
+                for t in m.types:
+                    in_file_types.add((m.name.lower(), t.name))
+            # Add the appropriate type definitions.
             to_pop = set()
             for t in sorted(needed_types):
-                if t in type_names:
+                if (((class_name, t) in in_file_types) and (t in type_names)):
                     to_pop.add(t)
                     lines += [f"    {t} = {class_name}.{t}"]
             needed_types -= to_pop
@@ -378,8 +391,8 @@ class Subroutine(Code):
         if (len(needed_types) > 0):
             from fmodpy.exceptions import NotSupportedError
             raise(NotSupportedError(
-                f"\nArguments for routine '{self.name}' were derived TYPE, but the type was not explicitly imported." +
-                f"\nAll derived types must either be defined in the subroutine where they are used, or explicitly imported from a wrapped module."
+                f"\nArguments for routine '{self.name}' were derived TYPE, but the type is not defined in this file." +
+                f"\nAll derived types must either be defined in the subroutine where they are used, or explicitly imported from a wrapped module in the same file."
             ))
         # Declare any internal types if they could not be put in the parent.
         if (len(type_lines) > 0):

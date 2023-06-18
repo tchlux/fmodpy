@@ -133,3 +133,19 @@ FUNCTION TEST_EXTENDED(OPT_ARRAY_IN, KNOWN_OPT_ARRAY_OUT,&
   
   ! End of function.
 END FUNCTION TEST_EXTENDED
+
+
+! Create a test that pulls from a type defined in another file. This will
+!  require that the Fortran wrapper USE's the other module, and that
+!  that the Python wrapper has a definition of the type from the other file.
+FUNCTION TEST_RETURN_AUX() RESULT(ANSWER)
+  TYPE, BIND(C) :: T3
+     INTEGER :: A
+     REAL :: B
+     CHARACTER :: C
+  END TYPE T3
+  TYPE(T3) :: ANSWER
+  ANSWER%A = 1
+  ANSWER%B = 2.0
+  ANSWER%C = '3'
+END FUNCTION TEST_RETURN_AUX

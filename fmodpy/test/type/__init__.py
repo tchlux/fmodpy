@@ -9,7 +9,9 @@ def test():
     print(f"  {test_name}..", end=" ", flush=True)
     import fmodpy
     fort = fmodpy.fimport(fort_file, build_dir=build_dir,
+                          dependencies=["test_type_aux.f03"],
                           output_dir=dir_name, rebuild=True,
+                          verbose=False
     )
     # ---------------------------------------------------------------
     # Begin specific testing code.
@@ -60,6 +62,13 @@ def test():
     assert(all(out3[1]["b"] == [3,2,1]))
     assert(all(out3[2]["a"] == list(reversed(range(7)[1:]))))
     assert(all(out3[2]["b"] == list(reversed(range(7)[1:]))))
+
+
+    # Test a code that uses an auxilliary type (in another file).
+    res = fort.test_return_aux()
+    assert(res.a == 1)
+    assert(res.b == 2.0)
+    assert(res.c == '3'.encode())
 
     # End specific testing code.
     # ---------------------------------------------------------------
