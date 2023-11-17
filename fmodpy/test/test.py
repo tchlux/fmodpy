@@ -55,6 +55,7 @@ def run_tests():
     from fmodpy.test.complex128 import test as test_complex128
     from fmodpy.test.type import test as test_type
     from fmodpy.test.misc import test as test_misc
+    from fmodpy.test.fixed_format import test as test_fixed_format
 
     # Run all of the tests.
     test_character()
@@ -69,6 +70,7 @@ def run_tests():
     test_complex128()
     test_type()
     test_misc()
+    test_fixed_format()
 
 
 if __name__ == "__main__":

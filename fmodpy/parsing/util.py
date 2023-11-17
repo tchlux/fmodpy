@@ -70,7 +70,7 @@ def simplify_fortran_file(in_file, fixed_format=False):
                 if (fixed_format):
                     line = line[:72]
                     # Line continuation character in column 5
-                    if (len(line) > 5) and (line[5] in {"1","*","$"}):
+                    if (len(line) > 5) and (not line[5].isspace()):
                         line = "&" + line[6:]
                         # Retro-actively pop the previous line for continuation
                         if len(curr_line) == 0: curr_line = fort_file.pop(-1)

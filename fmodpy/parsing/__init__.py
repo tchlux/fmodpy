@@ -26,7 +26,7 @@ ACCEPTABLE_LINE_STARTS = {'ABSTRACT', 'CHARACTER', 'END', # 'EXTERNAL',
                           'IMPLICIT', 'INTERFACE', 'MODULE', 'FUNCTION',
                           'OPTIONAL', 'PRIVATE', 'PROCEDURE',
                           'PUBLIC', 'PURE', 'RECURSIVE',
-                          'SUBROUTINE', 'TYPE', 'USE'}
+                          'SUBROUTINE', 'TYPE', 'USE', 'PARAMETER'}
 LINE_STARTS_TO_REMOVE = {'PURE', 'RECURSIVE'}
 
 # Immediately exclude a file from automatic compilation if it has a

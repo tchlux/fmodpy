@@ -21,9 +21,12 @@ class Code:
     can_contain = []
     # List of (func) parsing functions that handle ignorable contents.
     will_ignore = []
+    # Dictionary of parameters defined in this code scope (will be literal substituted).
+    parameters = {}
 
     # Initialize this object.
     def __init__(self, list_of_lines, preceding_comments="", parent=None):
+        self.parameters = {}
         self.parent = parent
         self.docs = preceding_comments
         # Initizlie lists of contained objects.
@@ -95,6 +98,27 @@ class Code:
                 else:
                     list_of_lines.pop(0)
                     continue
+            # Check if this is a defined parameter (and needs to be substituted in this scope).
+            elif (line[0] == "PARAMETER"):
+                # Declare any parameters as value substitutions and use them.
+                # Examples of lines this was built from:
+                #       PARAMETER        (NIPIMX=51)
+                #       PARAMETER        (NCC=0,NROW=6)   
+                if ("(" not in line) or (")" not in line):
+                    from fmodpy.exceptions import ParseError
+                    raise(ParseError("Encountered 'PARAMETER' line that does not contain open and close parenthesis."))
+                # Extract the values; make it one string; split by ","; then make key value pairs by splitting on "=".
+                parameters = line[line.index("(")+1 : line.index(")")]
+                parameters_dict = dict((
+                    key_value.split("=")
+                    for key_value in
+                    ("".join(parameters)).split(",")
+                ))
+                # Update the stored parameters.
+                print(f"  substituting parameters {parameters_dict}")
+                self.parameters.update(parameters_dict)
+                list_of_lines.pop(0)
+                continue
             # Parse the contained objects out of the file.
             for (parser, name) in self.can_contain:
                 pre_length = len(list_of_lines)

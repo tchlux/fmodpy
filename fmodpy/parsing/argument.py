@@ -97,11 +97,13 @@ class Argument:
         size_type = "IN" if not self.allocatable else "OUT"
         # Add extra arguments for the dimension sizes.
         if (self.dimension is not None):
+            # Store the old dimension.
             og_dimension = self.dimension[:]
             for i in range(len(self.dimension)):
                 lines.append(f"INTEGER(KIND=SELECTED_INT_KIND(18)), INTENT({size_type}) :: {self.name}_DIM_{i+1}")
                 # If this is allocatable, the dimension cannot be assumed on input.
                 if self.allocatable: self.dimension[i] = ":"
+                # Otherwise it must be input.
                 else: self.dimension[i] = f"{self.name}_DIM_{i+1}"
         # Add a local variable that will have the "ALLOCATABLE" metadata.
         if self.allocatable:
@@ -817,6 +819,22 @@ class Argument:
             else:
                 raise(NotImplementedError(f"\n\nUnrecognized part of Argument '{line[0]}'.\n"))
 
+    # Get the list of dimension values, including substutition of parameters.
+    def _dimension_values_list(self):
+        values = []
+        for d in self.dimension:
+            # Extract all the declared parameters in parents recursively.
+            parent_parameters = {}
+            parent = self.parent
+            while parent is not None:
+                for (k,v) in parent.parameters.items():
+                    if (k not in parent_parameters):
+                        parent_parameters[k] = v
+                parent = parent.parent
+            # If the value should be substituted, then do it, otherwise use it literally.
+            values.append(parent_parameters.get(d, d))
+        return values
+
     # Print the Fortran string declaration of this argument.
     def __str__(self):
         out = f"{self.type}"
@@ -830,7 +848,7 @@ class Argument:
         if (self.save): out += f", SAVE"
         if ((self.dimension is not None) and
             (len(self.dimension) > 0)):
-            out += f", DIMENSION({','.join(self.dimension)})"
+            out += f", DIMENSION({','.join(self._dimension_values_list())})"
         if (len(self.name) > 0): out += f" :: {self.name}"
         # Return the final string.
         return out

@@ -31,6 +31,8 @@ class Subroutine(Code):
         # Add used modules.
         for line in sorted(self.uses): out += "  "+line+"\n"
         for line in sorted(self.implicit_none): out += "  "+line+"\n"
+        # Add parameters.
+        for key_value in sorted(self.parameters.items()): out += "  ! PARAMETER ("+"=".join(key_value)+")\n"
         # Add types
         if (len(self.types) > 0): out += "\n"
         for t in self.types:
