@@ -250,7 +250,7 @@ class Code:
                 size_prog += f"  {temp_arg}\n"
             # Add print statements (printing the sizes).
             for k in sorted(unique_types_and_kinds):
-                name = GET_SIZE_VARIABLE_PREFIX + unique_types_and_kinds[k][0].name
+                name = GET_SIZE_VARIABLE_PREFIX + unique_types_and_kinds[k][0].function_safe_name()
                 size_prog += f"  WRITE (*,*) C_SIZEOF({name})\n"
             # End the program file.
             size_prog += "END PROGRAM GET_SIZE\n"

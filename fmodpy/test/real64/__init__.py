@@ -45,6 +45,12 @@ def test():
     assert(all(out3[1] == [3,2,1]))
     assert(all(out3[2] == list(reversed(range(7)[1:]))))
 
+    # Ensure that the output type of the subroutine is as expected.
+    out = fort.test_allocated_output_type()
+    assert(out.dtype.itemsize == 8)
+    assert(out.dtype == "float64")
+    assert(np.allclose(out / np.arange(1,out.size+1), 3.14))
+
     # End specific testing code.
     # ---------------------------------------------------------------
     print("passed", flush=True)
