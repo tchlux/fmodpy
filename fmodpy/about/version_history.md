@@ -28,3 +28,4 @@
 | 1.5.7<br>April 2023 | Delayed warning message about LOGICAL arrays until <br> those arguments actually have a python interface <br> generated. This is to prevent parsed-but-unused <br> subroutine arguments from creating noise. |
 | 1.6.0<br>June 2023 | Added support for Fortran strings. Updated the <br> generated codes to automatically check for source <br> code modifications when loading and recompile if the <br> source code was modified. |
 | 1.7.0<br>November 2023 | Added support for parsing PARAMETER lines in fixed <br> format Fortran. |
+| 1.7.1<br>January 2024 | Fixed bug in type of return argument for allocatable <br> arrays. Updated messaging about implicit typing to <br> be more useful. |
