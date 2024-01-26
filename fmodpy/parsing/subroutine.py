@@ -128,7 +128,7 @@ class Subroutine(Code):
             # procedure.
             else:
                 from fmodpy.exceptions import ParseError
-                raise(ParseError(f"Finished parsing {self.type} {self.name}, but never declared {', '.join(argument_names)}."))
+                raise(ParseError(f"Finished parsing {self.type} {self.name}, but never declared {', '.join(argument_names)}. If you want to allow implicit typing of arguments, pass argument 'implicit_typing=True' to 'fmodpy.fimport'."))
         # Remove empty interfaces.
         for i in empty_interfaces: self.interfaces.remove(i)
         # Sort the arguments in this subroutine according to their
