@@ -29,3 +29,4 @@
 | 1.6.0<br>June 2023 | Added support for Fortran strings. Updated the <br> generated codes to automatically check for source <br> code modifications when loading and recompile if the <br> source code was modified. |
 | 1.7.0<br>November 2023 | Added support for parsing PARAMETER lines in fixed <br> format Fortran. |
 | 1.7.1<br>January 2024 | Fixed bug in type of return argument for allocatable <br> arrays. Updated messaging about implicit typing to <br> be more useful. |
+| 1.7.2<br>March 2024 | Updating command execution to use a list of <br> arguments instead of string join and 'shell=True'. <br> Moved compile options to the end of the argument <br> list to ensure that libraries are included correctly <br> in compiled shared object. |
