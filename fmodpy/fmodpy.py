@@ -423,8 +423,8 @@ def autocompile_files(build_dir, dependencies):
             print(f"Compiling '{f}'.. ")
             # Reuse the "GET_SIZE_EXEC_FILE" name for compilation checks.
             compiled_file_path = os.path.join(build_dir, GET_SIZE_EXEC_FILE)
-            cmd = [f_compiler] + shared_object_args + f_compiler_args + [optimization_level] + \
-                ["-o", compiled_file_path] + [d for d in ordered_depends if (d != f)] + [f]
+            cmd = [f_compiler] + [d for d in ordered_depends if (d != f)] + [f] + shared_object_args + \
+                f_compiler_args + [optimization_level] + ["-o", compiled_file_path]
             print(f" {' '.join(cmd)}".replace(build_dir,"."))
             code, stdout, stderr = run(cmd, cwd=build_dir)
             # Update the list of existing mod files.
