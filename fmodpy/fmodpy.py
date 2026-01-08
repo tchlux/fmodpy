@@ -596,21 +596,31 @@ def prepare_build_directory(source_dir, build_dir):
 # Return True if a module should be rebuilt, False otherwise.
 def should_rebuild_module(dependencies, module_name, module_directory):
     # Get the modification time of the Python package file.
-    import os, sys, pkgutil, importlib
+    import os, sys
+    import importlib.util
     # Get the last modification time of the module (if it exists already)
     # Make sure that the output directory is in the sys path so that
     # the time-check import loader will work correctly.
     sys.path.insert(0, module_directory)
-    package = pkgutil.get_loader(module_name)
+    spec = importlib.util.find_spec(module_name)
+    package = None if spec is None else spec.loader
     if package is None:
         module_mod_time = 0
     elif (hasattr(package, "path")): # For regular source code packages.
         module_mod_time = os.path.getmtime(package.path)
     elif (hasattr(package, "archive")): # For zipimporter packages.
         module_mod_time = os.path.getmtime(package.archive)
+    elif (spec is not None and spec.origin and spec.origin not in ("built-in", "frozen", "namespace")
+          and os.path.exists(spec.origin)): # Fall back to the spec's origin path when it is a real file.
+        module_mod_time = os.path.getmtime(spec.origin)
+    elif (hasattr(package, "get_filename")): # Some loaders expose a filename via importlib.abc.InspectLoader.
+        try:
+            module_mod_time = os.path.getmtime(package.get_filename(module_name))
+        except Exception:
+            module_mod_time = 0
     elif (hasattr(package, "__file__")): # Just guessing that this might work.
-        module_mod_time = os.path.getmtime(os.path.realpath(package.__file__))
-    else: # Unkonwn situation.
+        module_mod_time = os.path.getmtime(os.path.getrealpath(package.__file__))
+    else: # Unknown situation.
         import warnings
         warnings.warn(f"Could not determine the modification time of the package '{module_name}'.")
         module_mod_time = 0

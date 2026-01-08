@@ -26,5 +26,5 @@ SUBROUTINE TEST_STRING(A,B)
 END SUBROUTINE TEST_STRING
 
 
-! python3 -c "import fmodpy as f; f.fimport('simple_character.f03', build_dir='.', verbose=True)"
-! python3 -c "import og_fmodpy as f; f.wrap('simple_character.f03', working_directory='og_fmodpy', verbose=True)"
+! python3 -c "import fmodpy as f; f.fimport('test_character.f03', build_dir='.', verbose=True)"
+! python3 -c "import og_fmodpy as f; f.wrap('test_character.f03', working_directory='og_fmodpy', verbose=True)"
