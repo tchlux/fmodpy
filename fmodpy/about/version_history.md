@@ -32,3 +32,4 @@
 | 1.7.2<br>March 2024 | Updating command execution to use a list of <br> arguments instead of string join and 'shell=True'. <br> Moved compile options to the end of the argument <br> list to ensure that libraries are included correctly <br> in compiled shared object. |
 | 1.7.3<br>March 2024 | A commensurate update to size check compilations <br> that was made in the previous update. Moving library <br> specification to the back of the list of arguments <br> for the compiler to ensure dependencies are included <br> correctly. |
 | 1.7.4<br>May 2024 | Add support for 'size(a,1,kind=int64)' style size <br> specifications of inputs. |
+| 1.7.5<br>January 2026 | Removing deprecated 'pkgutil' in favor of <br> 'importlib.util' for python3.14+ support. |
